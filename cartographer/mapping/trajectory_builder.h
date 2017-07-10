@@ -86,6 +86,13 @@ class TrajectoryBuilder {
     AddSensorData(sensor_id,
                   common::make_unique<sensor::Data>(time, odometer_pose));
   }
+
+  void AddPlaneData(const string& sensor_id, common::Time time,
+                    const Eigen::Vector4d& coefficients) {
+    AddSensorData(sensor_id,
+		  common::make_unique<sensor::Data>(time, coefficients));
+  }
+
 };
 
 }  // namespace mapping

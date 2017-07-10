@@ -96,6 +96,9 @@ void CollatedTrajectoryBuilder::HandleCollatedSensorData(
     case sensor::Data::Type::kOdometer:
       wrapped_trajectory_builder_->AddOdometerData(data->time,
                                                    data->odometer_pose);
+    case sensor::Data::Type::kPlane:
+      wrapped_trajectory_builder_->AddPlaneData(data->time,
+    	                                           data->coefficients);
       return;
   }
   LOG(FATAL);

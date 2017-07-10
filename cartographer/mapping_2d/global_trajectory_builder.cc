@@ -61,6 +61,11 @@ void GlobalTrajectoryBuilder::AddOdometerData(const common::Time time,
   local_trajectory_builder_.AddOdometerData(time, pose);
 }
 
+void GlobalTrajectoryBuilder::AddPlaneData(const common::Time time,
+					   const Eigen::Vector4d& coefficients)
+{
+
+}
 const mapping::GlobalTrajectoryBuilderInterface::PoseEstimate&
 GlobalTrajectoryBuilder::pose_estimate() const {
   return local_trajectory_builder_.pose_estimate();

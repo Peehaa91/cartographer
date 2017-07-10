@@ -73,9 +73,14 @@ TRAJECTORY_BUILDER_3D = {
       imu_gravity_time_constant = 1e9,
       imu_gravity_variance = 0,
       num_odometry_states = 1,
+      sensor_roll = 0,
+      sensor_pitch = 0,
+      sensor_yaw = 0,
+      use_plane = false,
     },
 
     use_online_correlative_scan_matching = false,
+    use_decay_model = true,
     real_time_correlative_scan_matcher = {
       linear_search_window = 0.15,
       angular_search_window = math.rad(1.),

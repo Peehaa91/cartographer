@@ -215,12 +215,202 @@ proto::SubmapsOptions CreateSubmapsOptions(
   CHECK_GT(options.num_range_data(), 0);
   return options;
 }
+/*DECAY SUBMAP STARTS*/
+
+SubmapDecay::SubmapDecay(const float high_resolution, const float low_resolution,
+               const transform::Rigid3d& local_pose)
+    : mapping::Submap(local_pose),
+      high_resolution_hybrid_grid(high_resolution),
+      low_resolution_hybrid_grid(low_resolution) {}
+
+SubmapsDecay::SubmapsDecay(const proto::SubmapsOptions& options)
+    : options_(options),
+      range_data_inserter_(options.range_data_inserter_options()) {
+  // We always want to have at least one submap which we can return and will
+  // create it at the origin in absence of a better choice.
+  //
+  // TODO(whess): Start with no submaps, so that all of them can be
+  // approximately gravity aligned.
+  AddSubmap(transform::Rigid3d::Identity());
+}
+
+const SubmapDecay* SubmapsDecay::Get(int index) const {
+  CHECK_GE(index, 0);
+  CHECK_LT(index, size());
+  return submaps_[index].get();
+}
+
+
+int SubmapsDecay::size() const { return submaps_.size(); }
+
+void SubmapsDecay::SubmapToProto(
+    int index, const transform::Rigid3d& global_submap_pose,
+    mapping::proto::SubmapQuery::Response* const response) const {
+  // Generate an X-ray view through the 'hybrid_grid', aligned to the xy-plane
+  // in the global map frame.
+  const HybridDecayGrid& hybrid_grid = Get(index)->high_resolution_hybrid_grid;
+  response->set_resolution(hybrid_grid.resolution());
+
+  // Compute a bounding box for the texture.
+  Eigen::Array2i min_index(INT_MAX, INT_MAX);
+  Eigen::Array2i max_index(INT_MIN, INT_MIN);
+  const std::vector<Eigen::Array4i> voxel_indices_and_probabilities =
+      ExtractVoxelData(hybrid_grid, global_submap_pose.cast<float>(),
+                       &min_index, &max_index);
+
+  const int width = max_index.y() - min_index.y() + 1;
+  const int height = max_index.x() - min_index.x() + 1;
+  response->set_width(width);
+  response->set_height(height);
+
+  const std::vector<PixelData> accumulated_pixel_data = AccumulatePixelData(
+      width, height, min_index, max_index, voxel_indices_and_probabilities);
+  const string cell_data = ComputePixelValues(accumulated_pixel_data);
+
+  common::FastGzipString(cell_data, response->mutable_cells());
+  *response->mutable_slice_pose() =
+      transform::ToProto(global_submap_pose.inverse() *
+                         transform::Rigid3d::Translation(Eigen::Vector3d(
+                             max_index.x() * hybrid_grid.resolution(),
+                             max_index.y() * hybrid_grid.resolution(),
+                             global_submap_pose.translation().z())));
+}
+
+void SubmapsDecay::InsertRangeData(const sensor::RangeData& range_data,
+                              const Eigen::Quaterniond& gravity_alignment) {
+  for (const int index : insertion_indices()) {
+    SubmapDecay* submap = submaps_[index].get();
+    const sensor::RangeData transformed_range_data = sensor::TransformRangeData(
+        range_data, submap->local_pose.inverse().cast<float>());
+    range_data_inserter_.Insert(
+        FilterRangeDataByMaxRange(transformed_range_data,
+                                  options_.high_resolution_max_range()),
+        &submap->high_resolution_hybrid_grid);
+    range_data_inserter_.Insert(transformed_range_data,
+                                &submap->low_resolution_hybrid_grid);
+    ++submap->num_range_data;
+  }
+  const SubmapDecay* const last_submap = Get(size() - 1);
+  if (last_submap->num_range_data == options_.num_range_data()) {
+    AddSubmap(transform::Rigid3d(range_data.origin.cast<double>(),
+                                 gravity_alignment));
+  }
+}
+
+void SubmapsDecay::AddSubmap(const transform::Rigid3d& local_pose) {
+  if (size() > 1) {
+    SubmapDecay* submap = submaps_[size() - 2].get();
+    CHECK(!submap->finished);
+    submap->finished = true;
+  }
+  submaps_.emplace_back(new SubmapDecay(options_.high_resolution(),
+                                   options_.low_resolution(), local_pose));
+  LOG(INFO) << "Added submapdecay " << size();
+}
+
+std::vector<SubmapsDecay::PixelData> SubmapsDecay::AccumulatePixelData(
+    const int width, const int height, const Eigen::Array2i& min_index,
+    const Eigen::Array2i& max_index,
+    const std::vector<Eigen::Array4i>& voxel_indices_and_probabilities) const {
+  std::vector<PixelData> accumulated_pixel_data(width * height);
+  for (const Eigen::Array4i& voxel_index_and_probability :
+       voxel_indices_and_probabilities) {
+    const Eigen::Array2i pixel_index = voxel_index_and_probability.head<2>();
+    if ((pixel_index < min_index).any() || (pixel_index > max_index).any()) {
+      // Out of bounds. This could happen because of floating point inaccuracy.
+      continue;
+    }
+    const int x = max_index.x() - pixel_index[0];
+    const int y = max_index.y() - pixel_index[1];
+    PixelData& pixel = accumulated_pixel_data[x * width + y];
+    ++pixel.count;
+    pixel.min_z = std::min(pixel.min_z, voxel_index_and_probability[2]);
+    pixel.max_z = std::max(pixel.max_z, voxel_index_and_probability[2]);
+    const float probability =
+        mapping::ValueToProbability(voxel_index_and_probability[3]);
+    pixel.probability_sum += probability;
+    pixel.max_probability = std::max(pixel.max_probability, probability);
+  }
+  return accumulated_pixel_data;
+}
+
+std::vector<Eigen::Array4i> SubmapsDecay::ExtractVoxelData(
+    const HybridDecayGrid& hybrid_grid, const transform::Rigid3f& transform,
+    Eigen::Array2i* min_index, Eigen::Array2i* max_index) const {
+  std::vector<Eigen::Array4i> voxel_indices_and_probabilities;
+  const float resolution_inverse = 1. / hybrid_grid.resolution();
+
+  constexpr double kXrayObstructedCellProbabilityLimit = 0.501;
+  for (auto it = HybridDecayGrid::Iterator(hybrid_grid); !it.Done(); it.Next()) {
+    const uint16 probability_value = it.GetValue().first;
+    const float probability = mapping::ValueToProbability(probability_value);
+    if (probability < kXrayObstructedCellProbabilityLimit) {
+      // We ignore non-obstructed cells.
+      continue;
+    }
+
+    const Eigen::Vector3f cell_center_submap =
+        hybrid_grid.GetCenterOfCell(it.GetCellIndex());
+    const Eigen::Vector3f cell_center_global = transform * cell_center_submap;
+    const Eigen::Array4i voxel_index_and_probability(
+        common::RoundToInt(cell_center_global.x() * resolution_inverse),
+        common::RoundToInt(cell_center_global.y() * resolution_inverse),
+        common::RoundToInt(cell_center_global.z() * resolution_inverse),
+        probability_value);
+
+    voxel_indices_and_probabilities.push_back(voxel_index_and_probability);
+    const Eigen::Array2i pixel_index = voxel_index_and_probability.head<2>();
+    *min_index = min_index->cwiseMin(pixel_index);
+    *max_index = max_index->cwiseMax(pixel_index);
+  }
+  return voxel_indices_and_probabilities;
+}
+
+string SubmapsDecay::ComputePixelValues(
+    const std::vector<SubmapsDecay::PixelData>& accumulated_pixel_data) const {
+  string cell_data;
+  cell_data.reserve(2 * accumulated_pixel_data.size());
+  constexpr float kMinZDifference = 3.f;
+  constexpr float kFreeSpaceWeight = 0.15f;
+  for (const PixelData& pixel : accumulated_pixel_data) {
+    // TODO(whess): Take into account submap rotation.
+    // TODO(whess): Document the approach and make it more independent from the
+    // chosen resolution.
+    const float z_difference = pixel.count > 0 ? pixel.max_z - pixel.min_z : 0;
+    if (z_difference < kMinZDifference) {
+      cell_data.push_back(0);  // value
+      cell_data.push_back(0);  // alpha
+      continue;
+    }
+    const float free_space = std::max(z_difference - pixel.count, 0.f);
+    const float free_space_weight = kFreeSpaceWeight * free_space;
+    const float total_weight = pixel.count + free_space_weight;
+    const float free_space_probability = 1.f - pixel.max_probability;
+    const float average_probability = mapping::ClampProbability(
+        (pixel.probability_sum + free_space_probability * free_space_weight) /
+        total_weight);
+    const int delta =
+        128 - mapping::ProbabilityToLogOddsInteger(average_probability);
+    const uint8 alpha = delta > 0 ? 0 : -delta;
+    const uint8 value = delta > 0 ? delta : 0;
+    cell_data.push_back(value);                         // value
+    cell_data.push_back((value || alpha) ? alpha : 1);  // alpha
+  }
+  return cell_data;
+}
+
 
 Submap::Submap(const float high_resolution, const float low_resolution,
                const transform::Rigid3d& local_pose)
     : mapping::Submap(local_pose),
       high_resolution_hybrid_grid(high_resolution),
       low_resolution_hybrid_grid(low_resolution) {}
+
+Submap::Submap(const SubmapDecay* submap)
+    : mapping::Submap(submap->local_pose),
+      high_resolution_hybrid_grid(submap->high_resolution_hybrid_grid),
+      low_resolution_hybrid_grid(submap->low_resolution_hybrid_grid) {}
+
 
 Submaps::Submaps(const proto::SubmapsOptions& options)
     : options_(options),
@@ -306,6 +496,24 @@ void Submaps::AddSubmap(const transform::Rigid3d& local_pose) {
   LOG(INFO) << "Added submap " << size();
 }
 
+void Submaps::AddSubmap(const SubmapDecay* submap) {
+  submaps_.emplace_back(new Submap(submap));
+  LOG(INFO) << "Added submap from submapdecay " << size();
+}
+
+void Submaps::ConvertSubmapFromDecay(const SubmapDecay* submap, int index)
+{
+  if (size() - 1 < index)
+  {
+    AddSubmap(submap);
+  }
+  else
+  {
+    std::vector<std::unique_ptr<Submap>>::iterator it = submaps_.begin() + index;
+    submaps_[index].reset(new Submap(submap));
+    //submaps_.emplace(it, new Submap(submap));
+  }
+}
 std::vector<Submaps::PixelData> Submaps::AccumulatePixelData(
     const int width, const int height, const Eigen::Array2i& min_index,
     const Eigen::Array2i& max_index,
@@ -396,6 +604,7 @@ string Submaps::ComputePixelValues(
   }
   return cell_data;
 }
+
 
 }  // namespace mapping_3d
 }  // namespace cartographer

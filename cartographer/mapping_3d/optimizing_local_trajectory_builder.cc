@@ -125,6 +125,16 @@ void OptimizingLocalTrajectoryBuilder::AddImuData(
   RemoveObsoleteSensorData();
 }
 
+void OptimizingLocalTrajectoryBuilder::AddPlaneData(
+	const common::Time time,
+	const Eigen::Vector4d& coefficients)
+{
+  plane_data_.push_back(PlaneData{
+	  time, coefficients,
+  });
+  RemoveObsoleteSensorData();
+}
+
 void OptimizingLocalTrajectoryBuilder::AddOdometerData(
     const common::Time time, const transform::Rigid3d& pose) {
   odometer_data_.push_back(OdometerData{time, pose});
@@ -211,6 +221,12 @@ void OptimizingLocalTrajectoryBuilder::RemoveObsoleteSensorData() {
       odometer_data_.size() > 1 &&
       (batches_.empty() || odometer_data_[1].time <= batches_.front().time)) {
     odometer_data_.pop_front();
+  }
+
+  while (
+	  plane_data_.size() > 1 &&
+	  (batches_.empty() || plane_data_[1].time <= batches_.front().time)) {
+	plane_data_.pop_front();
   }
 }
 

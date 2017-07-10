@@ -47,9 +47,21 @@ void InsertIntoProbabilityGrid(
 proto::SubmapsOptions CreateSubmapsOptions(
     common::LuaParameterDictionary* parameter_dictionary);
 
+
+struct SubmapDecay : public mapping::Submap {
+  SubmapDecay(float high_resolution, float low_resolution,
+         const transform::Rigid3d& local_pose);
+
+  HybridDecayGrid high_resolution_hybrid_grid;
+  HybridDecayGrid low_resolution_hybrid_grid;
+  bool finished = false;
+};
+
 struct Submap : public mapping::Submap {
   Submap(float high_resolution, float low_resolution,
          const transform::Rigid3d& local_pose);
+
+  Submap(const SubmapDecay* submap);
 
   HybridGrid high_resolution_hybrid_grid;
   HybridGrid low_resolution_hybrid_grid;
@@ -65,6 +77,64 @@ class Submaps : public mapping::Submaps {
   Submaps& operator=(const Submaps&) = delete;
 
   const Submap* Get(int index) const override;
+  int size() const override;
+  void SubmapToProto(
+      int index, const transform::Rigid3d& global_submap_pose,
+      mapping::proto::SubmapQuery::Response* response) const override;
+
+  // Inserts 'range_data' into the Submap collection. 'gravity_alignment' is
+  // used for the orientation of new submaps so that the z axis approximately
+  // aligns with gravity.
+  void InsertRangeData(const sensor::RangeData& range_data,
+                       const Eigen::Quaterniond& gravity_alignment);
+
+  void ConvertSubmapFromDecay(const SubmapDecay* submap, int index);
+
+ private:
+  struct PixelData {
+    int min_z = INT_MAX;
+    int max_z = INT_MIN;
+    int count = 0;
+    float probability_sum = 0.f;
+    float max_probability = 0.5f;
+  };
+
+  void AddSubmap(const SubmapDecay* submap);
+
+  void AddSubmap(const transform::Rigid3d& local_pose);
+
+  std::vector<PixelData> AccumulatePixelData(
+      const int width, const int height, const Eigen::Array2i& min_index,
+      const Eigen::Array2i& max_index,
+      const std::vector<Eigen::Array4i>& voxel_indices_and_probabilities) const;
+  // The first three entries of each returned value are a cell_index and the
+  // last is the corresponding probability value. We batch them together like
+  // this to only have one vector and have better cache locality.
+  std::vector<Eigen::Array4i> ExtractVoxelData(
+      const HybridGrid& hybrid_grid, const transform::Rigid3f& transform,
+      Eigen::Array2i* min_index, Eigen::Array2i* max_index) const;
+  // Builds texture data containing interleaved value and alpha for the
+  // visualization from 'accumulated_pixel_data'.
+  string ComputePixelValues(
+      const std::vector<PixelData>& accumulated_pixel_data) const;
+
+  const proto::SubmapsOptions options_;
+
+  // 'submaps_' contains pointers, so that resizing the vector does not
+  // invalidate handed out Submap* pointers.
+  std::vector<std::unique_ptr<Submap>> submaps_;
+  RangeDataInserter range_data_inserter_;
+};
+
+// A container of Submaps.
+class SubmapsDecay : public mapping::Submaps {
+ public:
+  explicit SubmapsDecay(const proto::SubmapsOptions& options);
+
+  SubmapsDecay(const SubmapsDecay&) = delete;
+  SubmapsDecay& operator=(const SubmapsDecay&) = delete;
+
+  const SubmapDecay* Get(int index) const override;
   int size() const override;
   void SubmapToProto(
       int index, const transform::Rigid3d& global_submap_pose,
@@ -95,7 +165,7 @@ class Submaps : public mapping::Submaps {
   // last is the corresponding probability value. We batch them together like
   // this to only have one vector and have better cache locality.
   std::vector<Eigen::Array4i> ExtractVoxelData(
-      const HybridGrid& hybrid_grid, const transform::Rigid3f& transform,
+      const HybridDecayGrid& hybrid_grid, const transform::Rigid3f& transform,
       Eigen::Array2i* min_index, Eigen::Array2i* max_index) const;
   // Builds texture data containing interleaved value and alpha for the
   // visualization from 'accumulated_pixel_data'.
@@ -106,7 +176,7 @@ class Submaps : public mapping::Submaps {
 
   // 'submaps_' contains pointers, so that resizing the vector does not
   // invalidate handed out Submap* pointers.
-  std::vector<std::unique_ptr<Submap>> submaps_;
+  std::vector<std::unique_ptr<SubmapDecay>> submaps_;
   RangeDataInserter range_data_inserter_;
 };
 

@@ -47,6 +47,8 @@ class GlobalTrajectoryBuilder
                   const Eigen::Vector3d& angular_velocity) override;
   void AddOdometerData(common::Time time,
                        const transform::Rigid3d& pose) override;
+  void AddPlaneData(common::Time time,
+		    const Eigen::Vector4d& coefficients) override;
 
  private:
   const int trajectory_id_;

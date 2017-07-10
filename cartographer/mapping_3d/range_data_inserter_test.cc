@@ -39,7 +39,7 @@ class RangeDataInserterTest : public ::testing::Test {
     range_data_inserter_.reset(new RangeDataInserter(options_));
   }
 
-  void InsertPointCloud() {
+  virtual void InsertPointCloud() {
     const Eigen::Vector3f origin = Eigen::Vector3f(0.f, 0.f, -4.f);
     sensor::PointCloud returns = {
         {-3.f, -1.f, 4.f}, {-2.f, 0.f, 4.f}, {-1.f, 1.f, 4.f}, {0.f, 2.f, 4.f}};
@@ -102,6 +102,42 @@ TEST_F(RangeDataInserterTest, ProbabilityProgression) {
   EXPECT_NEAR(mapping::kMinProbability, GetProbability(0.f, 0.f, -3.f), 1e-3);
 }
 
+class RangeDataDecayInserterTest : public RangeDataInserterTest {
+  protected:
+  RangeDataDecayInserterTest() : hybrid_grid_(0.05f)
+  {
+  auto parameter_dictionary = common::MakeDictionary(
+      "return { "
+      "hit_probability = 0.7, "
+      "miss_probability = 0.4, "
+      "num_free_space_voxels = 1000, "
+      "}");
+  options_ = CreateRangeDataInserterOptions(parameter_dictionary.get());
+  range_data_inserter_.reset(new RangeDataInserter(options_));
+  }
+  virtual void InsertPointCloud()
+  {
+    const Eigen::Vector3f origin = Eigen::Vector3f(0.f, 0.f, -4.f);
+    sensor::PointCloud returns = {
+        {-3.f, -1.f, 4.f}, {-2.f, 0.f, 4.f}, {-1.f, 1.f, 4.f}, {0.f, 2.f, 4.f}};
+    range_data_inserter_->RayTracingInsert(sensor::RangeData{origin, returns, {}},
+                                           &hybrid_grid_);
+
+  }
+  private:
+   HybridDecayGrid hybrid_grid_;
+   std::unique_ptr<RangeDataInserter> range_data_inserter_;
+   proto::RangeDataInserterOptions options_;
+};
+TEST_F(RangeDataDecayInserterTest, RayCaster)
+{
+  InsertPointCloud();
+
+}
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
 }  // namespace
 }  // namespace mapping_3d
 }  // namespace cartographer

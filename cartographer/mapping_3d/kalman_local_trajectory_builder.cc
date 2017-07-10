@@ -32,6 +32,7 @@ KalmanLocalTrajectoryBuilder::KalmanLocalTrajectoryBuilder(
     const proto::LocalTrajectoryBuilderOptions& options)
     : options_(options),
       submaps_(common::make_unique<Submaps>(options.submaps_options())),
+      submapsdecay_(common::make_unique<SubmapsDecay>(options.submaps_options())),
       scan_matcher_pose_estimate_(transform::Rigid3d::Identity()),
       motion_filter_(options.motion_filter_options()),
       real_time_correlative_scan_matcher_(
@@ -67,6 +68,17 @@ void KalmanLocalTrajectoryBuilder::AddImuData(
   kalman_filter::PoseCovariance unused_covariance_estimate;
   pose_tracker_->GetPoseEstimateMeanAndCovariance(time, &pose_estimate,
                                                   &unused_covariance_estimate);
+}
+
+void KalmanLocalTrajectoryBuilder::AddPlaneData(const common::Time time, const Eigen::Vector4d& coefficients)
+{
+	if (!pose_tracker_) {
+	pose_tracker_ = common::make_unique<kalman_filter::PoseTracker>(
+		options_.kalman_local_trajectory_builder_options()
+			.pose_tracker_options(),
+		time);
+	}
+	pose_tracker_->AddGroundPlaneObservation(time, coefficients);
 }
 
 std::unique_ptr<KalmanLocalTrajectoryBuilder::InsertionResult>
@@ -139,9 +151,17 @@ KalmanLocalTrajectoryBuilder::AddAccumulatedRangeData(
   kalman_filter::PoseCovariance unused_covariance_prediction;
   pose_tracker_->GetPoseEstimateMeanAndCovariance(
       time, &pose_prediction, &unused_covariance_prediction);
-
-  const Submap* const matching_submap =
+  const Submap* matching_submap;
+  if (!options_.kalman_local_trajectory_builder_options().use_decay_model())
+  {
+    matching_submap =
       submaps_->Get(submaps_->matching_index());
+  }
+  else
+  {
+    //submaps_->AddSubmap(submapsdecay_->Get(submapsdecay_->matching_index()));
+    matching_submap = submaps_->Get(submaps_->matching_index());
+  }
   transform::Rigid3d initial_ceres_pose =
       matching_submap->local_pose.inverse() * pose_prediction;
   sensor::AdaptiveVoxelFilter adaptive_voxel_filter(
@@ -219,19 +239,46 @@ KalmanLocalTrajectoryBuilder::InsertIntoSubmap(
   if (motion_filter_.IsSimilar(time, pose_observation)) {
     return nullptr;
   }
-  const Submap* const matching_submap =
-      submaps_->Get(submaps_->matching_index());
-  std::vector<const Submap*> insertion_submaps;
-  for (int insertion_index : submaps_->insertion_indices()) {
-    insertion_submaps.push_back(submaps_->Get(insertion_index));
-  }
-  submaps_->InsertRangeData(
-      sensor::TransformRangeData(range_data_in_tracking,
-                                 pose_observation.cast<float>()),
+  if (!options_.kalman_local_trajectory_builder_options().use_decay_model())
+  {
+    const Submap* const matching_submap =
+        submaps_->Get(submaps_->matching_index());
+    std::vector<const Submap*> insertion_submaps;
+    for (int insertion_index : submaps_->insertion_indices()) {
+      insertion_submaps.push_back(submaps_->Get(insertion_index));
+    }
+    submaps_->InsertRangeData(
+        sensor::TransformRangeData(range_data_in_tracking,
+                                   pose_observation.cast<float>()),
       pose_tracker_->gravity_orientation());
-  return std::unique_ptr<InsertionResult>(
-      new InsertionResult{time, range_data_in_tracking, pose_observation,
-                          matching_submap, insertion_submaps});
+//    LOG(INFO)<<"size decay: "<<submapsdecay_->insertion_indices().size()
+//        <<" size normal: "<<submaps_->insertion_indices().size();
+    return std::unique_ptr<InsertionResult>(
+        new InsertionResult{time, range_data_in_tracking, pose_observation,
+                            matching_submap, insertion_submaps});
+  }
+  else
+  {
+//    LOG(INFO)<<"decay";
+    const Submap* const matching_submap =
+        submaps_->Get(submaps_->matching_index());
+    std::vector<const Submap*> insertion_submaps;
+    submapsdecay_->InsertRangeData(
+            sensor::TransformRangeData(range_data_in_tracking,
+                                       pose_observation.cast<float>()),
+          pose_tracker_->gravity_orientation());
+    for (int insertion_index : submapsdecay_->insertion_indices()) {
+      //submaps_->AddSubmap(submapsdecay_->Get(insertion_index));
+      LOG(INFO)<<"insertion_index: "<<insertion_index;
+      submaps_->ConvertSubmapFromDecay(submapsdecay_->Get(insertion_index), insertion_index);
+      insertion_submaps.push_back(submaps_->Get(insertion_index));
+    }
+    LOG(INFO)<<"size decay: "<<submapsdecay_->insertion_indices().size()
+        <<" size normal: "<<submaps_->insertion_indices().size();
+    return std::unique_ptr<InsertionResult>(
+        new InsertionResult{time, range_data_in_tracking, pose_observation,
+                            matching_submap, insertion_submaps});
+  }
 }
 
 }  // namespace mapping_3d

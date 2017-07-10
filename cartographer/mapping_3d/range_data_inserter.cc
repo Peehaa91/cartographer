@@ -91,5 +91,87 @@ void RangeDataInserter::Insert(const sensor::RangeData& range_data,
                        hybrid_grid, options_.num_free_space_voxels());
 }
 
+void RangeDataInserter::Insert(const sensor::RangeData& range_data,
+                               HybridDecayGrid* hybrid_grid) const {
+  RayTracingInsert(range_data, hybrid_grid);
+}
+
+void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
+                                                         HybridDecayGrid* hybrid_grid) const{
+
+  /// ----------  see OcTreeBase::computeRayKeys  -----------
+
+    // Initialization phase -------------------------------------------------------
+    Eigen::Array3f current_key = hybrid_grid->GetCellIndex(range_data.origin).cast<float>();
+    std::vector<std::vector<Eigen::Array3i>> lines;
+    for (const Eigen::Vector3f& hit : range_data.returns)
+    {
+      std::vector<Eigen::Array3i> line;
+      Eigen::Array3i hit_cell = hybrid_grid->GetCellIndex(hit);
+      Eigen::Vector3f direction = hit - range_data.origin;
+      LOG(INFO)<<"hit: "<<hit_cell<<std::endl<<" origin: "<<current_key<<std::endl<<" direction: "<<direction;
+      int step[3];
+      double tMax[3];
+      double tDelta[3];
+
+      for(unsigned int i=0; i < 3; ++i) {
+        // compute step direction
+        if (direction(i) > 0.0) step[i] =  1;
+        else if (direction(i) < 0.0)   step[i] = -1;
+        else step[i] = 0;
+
+        // compute tMax, tDelta
+        if (step[i] != 0) {
+          // corner point of voxel (in direction of ray)
+          double voxelBorder = current_key[i];
+          voxelBorder += double(step[i] * hybrid_grid->resolution() * 0.5);
+
+          tMax[i] = ( voxelBorder - range_data.origin(i) ) / direction(i);
+          tDelta[i] = hybrid_grid->resolution() / fabs( direction(i) );
+        }
+        else {
+          tMax[i] =  std::numeric_limits<double>::max();
+          tDelta[i] = std::numeric_limits<double>::max();
+        }
+      }
+
+
+      // Incremental phase  ---------------------------------------------------------
+
+      bool done = false;
+
+      while (!done) {
+        unsigned int dim;
+        LOG(INFO)<<"0: "<<tMax[0]<<" 1: "<<tMax[1]<<" 2: "<<tMax[2];
+        // find minimum tMax:
+        if (tMax[0] < tMax[1]){
+          if (tMax[0] < tMax[2]) dim = 0;
+          else                   dim = 2;
+        }
+        else {
+          if (tMax[1] < tMax[2]) dim = 1;
+          else                   dim = 2;
+        }
+
+        // advance in direction "dim"
+        LOG(INFO)<<"before "<<" cell_x: "<<current_key(0)<<std::endl<<" cell_y: "<<current_key(1)
+            <<std::endl<<" cell_z: "<<current_key(2);
+        current_key[dim] += step[dim];
+        tMax[dim] += tDelta[dim];
+
+
+        // generate world coords from key
+        Eigen::Array3i pos = current_key.cast<int>();
+        LOG(INFO)<<" cell_x: "<<current_key(0)<<std::endl<<" cell_y: "<<current_key(1)
+            <<std::endl<<" cell_z: "<<current_key(2);
+        line.push_back(pos);
+        if (pos(0) == hit_cell(0) && pos(1) == hit_cell(1) && pos(2) == hit_cell(2))
+          done = true;
+      }
+      // end while
+      lines.push_back(line);
+    }
+}
+
 }  // namespace mapping_3d
 }  // namespace cartographer

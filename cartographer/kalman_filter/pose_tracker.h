@@ -29,6 +29,7 @@
 #include "cartographer/kalman_filter/proto/pose_tracker_options.pb.h"
 #include "cartographer/kalman_filter/unscented_kalman_filter.h"
 #include "cartographer/mapping/imu_tracker.h"
+#include "cartographer/mapping_3d/ground_plane_tracker.h"
 #include "cartographer/mapping/odometry_state_tracker.h"
 #include "cartographer/sensor/proto/sensor.pb.h"
 #include "cartographer/transform/transform.h"
@@ -92,6 +93,8 @@ class PoseTracker {
   void AddImuAngularVelocityObservation(
       common::Time time, const Eigen::Vector3d& imu_angular_velocity);
 
+  void AddGroundPlaneObservation(common::Time time, const Eigen::Vector4d& plane_coefficients);
+
   // Updates from a pose estimate in the map frame.
   void AddPoseObservation(common::Time time, const transform::Rigid3d& pose,
                           const PoseCovariance& covariance);
@@ -131,6 +134,7 @@ class PoseTracker {
   common::Time time_;
   KalmanFilter kalman_filter_;
   mapping::ImuTracker imu_tracker_;
+  mapping_3d::GroundPlaneTracker ground_plane_tracker_;
   mapping::OdometryStateTracker odometry_state_tracker_;
 };
 

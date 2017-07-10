@@ -63,6 +63,8 @@ class LocalTrajectoryBuilder {
                   const Eigen::Vector3d& angular_velocity);
   void AddOdometerData(common::Time time, const transform::Rigid3d& pose);
 
+  void AddPlaneData(const common::Time time, const Eigen::Vector4d& coefficients);
+
   const Submaps* submaps() const;
 
  private:

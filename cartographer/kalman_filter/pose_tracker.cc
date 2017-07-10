@@ -137,6 +137,14 @@ proto::PoseTrackerOptions CreatePoseTrackerOptions(
       parameter_dictionary->GetDouble("imu_gravity_variance"));
   options.set_num_odometry_states(
       parameter_dictionary->GetNonNegativeInt("num_odometry_states"));
+  options.set_sensor_roll(
+	  parameter_dictionary->GetDouble("sensor_roll"));
+  options.set_sensor_pitch(
+	  parameter_dictionary->GetDouble("sensor_pitch"));
+  options.set_sensor_yaw(
+	  parameter_dictionary->GetDouble("sensor_yaw"));
+  options.set_use_plane(
+	  parameter_dictionary->GetBool("use_plane"));
   CHECK_GT(options.num_odometry_states(), 0);
   return options;
 }
@@ -156,7 +164,11 @@ PoseTracker::PoseTracker(const proto::PoseTrackerOptions& options,
       time_(time),
       kalman_filter_(KalmanFilterInit(), AddDelta, ComputeDelta),
       imu_tracker_(options.imu_gravity_time_constant(), time),
-      odometry_state_tracker_(options.num_odometry_states()) {}
+      odometry_state_tracker_(options.num_odometry_states()) {
+  Eigen::Quaterniond quaternion = transform::RollPitchYaw(
+      options.sensor_roll(), options.sensor_pitch(), options.sensor_yaw());
+  ground_plane_tracker_ = mapping_3d::GroundPlaneTracker(quaternion, time);
+}
 
 PoseTracker::~PoseTracker() {}
 
@@ -206,7 +218,8 @@ const PoseTracker::Distribution PoseTracker::BuildModelNoise(
 }
 
 void PoseTracker::Predict(const common::Time time) {
-  imu_tracker_.Advance(time);
+  if (!options_.use_plane())
+	  imu_tracker_.Advance(time);
   CHECK_LE(time_, time);
   const double delta_t = common::ToSeconds(time - time_);
   if (delta_t == 0.) {
@@ -286,17 +299,34 @@ PoseTracker::odometry_states() const {
 
 transform::Rigid3d PoseTracker::RigidFromState(
     const PoseTracker::State& state) {
-  return transform::Rigid3d(
-      Eigen::Vector3d(state[PoseTracker::kMapPositionX],
-                      state[PoseTracker::kMapPositionY],
-                      state[PoseTracker::kMapPositionZ]),
-      transform::AngleAxisVectorToRotationQuaternion(
-          Eigen::Vector3d(state[PoseTracker::kMapOrientationX],
-                          state[PoseTracker::kMapOrientationY],
-                          state[PoseTracker::kMapOrientationZ])) *
-          imu_tracker_.orientation());
+  if (!options_.use_plane()) {
+    return transform::Rigid3d(
+        Eigen::Vector3d(state[PoseTracker::kMapPositionX],
+                        state[PoseTracker::kMapPositionY],
+                        state[PoseTracker::kMapPositionZ]),
+        transform::AngleAxisVectorToRotationQuaternion(
+            Eigen::Vector3d(state[PoseTracker::kMapOrientationX],
+                            state[PoseTracker::kMapOrientationY],
+                            state[PoseTracker::kMapOrientationZ])) *
+            imu_tracker_.orientation());
+  } else {
+    return transform::Rigid3d(
+        Eigen::Vector3d(state[PoseTracker::kMapPositionX],
+                        state[PoseTracker::kMapPositionY],
+                        state[PoseTracker::kMapPositionZ]),
+        transform::AngleAxisVectorToRotationQuaternion(
+            Eigen::Vector3d(state[PoseTracker::kMapOrientationX],
+                            state[PoseTracker::kMapOrientationY],
+                            state[PoseTracker::kMapOrientationZ])) *
+            ground_plane_tracker_.orientation());
+  }
 }
 
+void PoseTracker::AddGroundPlaneObservation(
+    common::Time time, const Eigen::Vector4d& plane_coefficients) {
+  ground_plane_tracker_.AddGroundPlaneObservation(plane_coefficients);
+  Predict(time);
+}
 PoseCovariance BuildPoseCovariance(const double translational_variance,
                                    const double rotational_variance) {
   const Eigen::Matrix3d translational =

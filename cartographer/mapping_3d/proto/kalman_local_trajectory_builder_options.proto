@@ -31,4 +31,6 @@ message KalmanLocalTrajectoryBuilderOptions {
   optional double scan_matcher_variance = 6;
   optional double odometer_translational_variance = 4;
   optional double odometer_rotational_variance = 5;
+  // Decay Map enable or not
+  optional bool use_decay_model = 7;
 }

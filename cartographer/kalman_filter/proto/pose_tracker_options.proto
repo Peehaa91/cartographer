@@ -28,5 +28,9 @@ message PoseTrackerOptions {
   optional double imu_gravity_variance = 5;
 
   // Maximum number of previous odometry states to keep.
-  optional int32 num_odometry_states = 6;
+  optional int32 num_odometry_states = 6; 
+  optional double sensor_roll = 7;
+  optional double sensor_pitch = 8;
+  optional double sensor_yaw = 9;
+  optional bool use_plane = 10;
 }

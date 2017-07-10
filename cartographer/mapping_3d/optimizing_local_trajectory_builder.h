@@ -56,6 +56,8 @@ class OptimizingLocalTrajectoryBuilder
       const sensor::PointCloud& ranges) override;
   void AddOdometerData(common::Time time,
                        const transform::Rigid3d& pose) override;
+  void AddPlaneData(const common::Time time,
+		    const Eigen::Vector4d& coefficients) override;
   const mapping_3d::Submaps* submaps() const override;
   const PoseEstimate& pose_estimate() const override;
 
@@ -98,6 +100,10 @@ class OptimizingLocalTrajectoryBuilder
     transform::Rigid3d pose;
   };
 
+  struct PlaneData {
+	common::Time time;
+	Eigen::Vector4d coefficients;
+  };
   State PredictState(const State& start_state, const common::Time start_time,
                      const common::Time end_time);
 
@@ -122,6 +128,7 @@ class OptimizingLocalTrajectoryBuilder
   std::deque<Batch> batches_;
   double gravity_constant_ = 9.8;
   std::deque<ImuData> imu_data_;
+  std::deque<PlaneData> plane_data_;
   std::deque<OdometerData> odometer_data_;
 
   PoseEstimate last_pose_estimate_;

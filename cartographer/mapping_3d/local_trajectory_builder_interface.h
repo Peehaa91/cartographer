@@ -56,6 +56,7 @@ class LocalTrajectoryBuilderInterface {
       const sensor::PointCloud& ranges) = 0;
   virtual void AddOdometerData(common::Time time,
                                const transform::Rigid3d& pose) = 0;
+  virtual void AddPlaneData(const common::Time time, const Eigen::Vector4d& coefficients) = 0;
 
   virtual const mapping_3d::Submaps* submaps() const = 0;
   virtual const PoseEstimate& pose_estimate() const = 0;

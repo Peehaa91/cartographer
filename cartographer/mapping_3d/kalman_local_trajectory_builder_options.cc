@@ -42,6 +42,8 @@ CreateKalmanLocalTrajectoryBuilderOptions(
       parameter_dictionary->GetDouble("odometer_translational_variance"));
   options.set_odometer_rotational_variance(
       parameter_dictionary->GetDouble("odometer_rotational_variance"));
+  options.set_use_decay_model(
+      parameter_dictionary->GetBool("use_decay_model"));
   return options;
 }
 

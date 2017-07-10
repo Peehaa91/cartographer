@@ -459,6 +459,26 @@ class HybridGridBase : public Grid<ValueType> {
   const float resolution_;
 };
 
+
+class HybridDecayGrid : public HybridGridBase<std::pair<uint16,uint16>>{
+public:
+  explicit HybridDecayGrid(const float resolution)
+      : HybridGridBase<std::pair<uint16,uint16>>(resolution) {}
+
+  explicit HybridDecayGrid(const proto::HybridGrid& proto)
+      : HybridDecayGrid(proto.resolution()) {
+    CHECK_EQ(proto.values_size(), proto.x_indices_size());
+    CHECK_EQ(proto.values_size(), proto.y_indices_size());
+    CHECK_EQ(proto.values_size(), proto.z_indices_size());
+
+  }
+  void calculaeProbabilityValues()
+  {
+
+  }
+
+};
+
 // A grid containing probability values stored using 15 bits, and an update
 // marker per voxel.
 class HybridGrid : public HybridGridBase<uint16> {
@@ -477,6 +497,14 @@ class HybridGrid : public HybridGridBase<uint16> {
       SetProbability(Eigen::Vector3i(proto.x_indices(i), proto.y_indices(i),
                                      proto.z_indices(i)),
                      mapping::ValueToProbability(proto.values(i)));
+    }
+  }
+
+  explicit HybridGrid(const HybridDecayGrid& hybrid_decay_grid)
+       : HybridGridBase<uint16>(hybrid_decay_grid.resolution()){
+    for (auto& it : hybrid_decay_grid){
+      SetProbability(Eigen::Vector3i(it.first.x(), it.first.y(),
+                                     it.first.z()), it.second.first);
     }
   }
 

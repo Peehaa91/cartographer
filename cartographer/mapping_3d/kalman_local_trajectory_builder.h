@@ -53,6 +53,9 @@ class KalmanLocalTrajectoryBuilder : public LocalTrajectoryBuilderInterface {
       const sensor::PointCloud& ranges) override;
   void AddOdometerData(common::Time time,
                        const transform::Rigid3d& pose) override;
+
+  void AddPlaneData(const common::Time time, const Eigen::Vector4d& coefficients) override;
+
   const mapping_3d::Submaps* submaps() const override;
   const PoseEstimate& pose_estimate() const override;
 
@@ -66,6 +69,7 @@ class KalmanLocalTrajectoryBuilder : public LocalTrajectoryBuilderInterface {
 
   const proto::LocalTrajectoryBuilderOptions options_;
   std::unique_ptr<mapping_3d::Submaps> submaps_;
+  std::unique_ptr<mapping_3d::SubmapsDecay> submapsdecay_;
 
   PoseEstimate last_pose_estimate_;
 
