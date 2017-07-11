@@ -68,6 +68,7 @@ class SubmapDecay : public mapping::Submap {
                        const RangeDataInserter& range_data_inserter,
                        int high_resolution_max_range);
   void Finish();
+
  private:
   HybridDecayGrid high_resolution_hybrid_grid_;
   HybridDecayGrid low_resolution_hybrid_grid_;
