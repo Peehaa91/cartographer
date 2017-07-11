@@ -14,14 +14,19 @@
 
 syntax = "proto2";
 
-package cartographer.mapping_3d.proto;
+package cartographer.ground_truth.proto;
 
-message OptimizingLocalTrajectoryBuilderOptions {
-  optional double high_resolution_grid_weight = 6;
-  optional double low_resolution_grid_weight = 7;
-  optional double velocity_weight = 1;
-  optional double translation_weight = 2;
-  optional double rotation_weight = 3;
-  optional double odometry_translation_weight = 4;
-  optional double odometry_rotation_weight = 5;
+import "cartographer/transform/proto/transform.proto";
+
+message Relation {
+  optional int64 timestamp1 = 1;
+  optional int64 timestamp2 = 2;
+
+  // The 'expected' relative transform of the tracking frame from 'timestamp2'
+  // to 'timestamp1'.
+  optional transform.proto.Rigid3d expected = 3;
+}
+
+message GroundTruth {
+  repeated Relation relation = 1;
 }

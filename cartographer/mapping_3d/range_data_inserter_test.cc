@@ -134,10 +134,10 @@ TEST_F(RangeDataDecayInserterTest, RayCaster)
   InsertPointCloud();
 
 }
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+//int main(int argc, char **argv) {
+//    ::testing::InitGoogleTest(&argc, argv);
+//    return RUN_ALL_TESTS();
+//}
 }  // namespace
 }  // namespace mapping_3d
 }  // namespace cartographer

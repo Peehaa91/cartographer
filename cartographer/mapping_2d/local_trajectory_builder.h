@@ -28,7 +28,6 @@
 #include "cartographer/mapping_2d/scan_matching/real_time_correlative_scan_matcher.h"
 #include "cartographer/mapping_2d/submaps.h"
 #include "cartographer/mapping_3d/motion_filter.h"
-#include "cartographer/sensor/configuration.h"
 #include "cartographer/sensor/voxel_filter.h"
 #include "cartographer/transform/rigid_transform.h"
 
@@ -41,8 +40,7 @@ class LocalTrajectoryBuilder {
  public:
   struct InsertionResult {
     common::Time time;
-    const mapping::Submap* matching_submap;
-    std::vector<const mapping::Submap*> insertion_submaps;
+    std::vector<std::shared_ptr<const Submap>> insertion_submaps;
     transform::Rigid3d tracking_to_tracking_2d;
     sensor::RangeData range_data_in_tracking_2d;
     transform::Rigid2d pose_estimate_2d;
@@ -65,8 +63,6 @@ class LocalTrajectoryBuilder {
 
   void AddPlaneData(const common::Time time, const Eigen::Vector4d& coefficients);
 
-  const Submaps* submaps() const;
-
  private:
   sensor::RangeData TransformAndFilterRangeData(
       const transform::Rigid3f& tracking_to_tracking_2d,
@@ -86,7 +82,7 @@ class LocalTrajectoryBuilder {
   void Predict(common::Time time);
 
   const proto::LocalTrajectoryBuilderOptions options_;
-  Submaps submaps_;
+  ActiveSubmaps active_submaps_;
   mapping::GlobalTrajectoryBuilderInterface::PoseEstimate last_pose_estimate_;
 
   // Current 'pose_estimate_' and 'velocity_estimate_' at 'time_'.

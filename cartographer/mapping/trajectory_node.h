@@ -17,7 +17,7 @@
 #ifndef CARTOGRAPHER_MAPPING_TRAJECTORY_NODE_H_
 #define CARTOGRAPHER_MAPPING_TRAJECTORY_NODE_H_
 
-#include <deque>
+#include <memory>
 #include <vector>
 
 #include "Eigen/Core"
@@ -28,20 +28,12 @@
 namespace cartographer {
 namespace mapping {
 
-class Submaps;
-
 struct TrajectoryNode {
-  struct ConstantData {
+  struct Data {
     common::Time time;
 
-    // Range data in 'pose' frame. Only used in the 2D case.
-    sensor::RangeData range_data_2d;
-
-    // Range data in 'pose' frame. Only used in the 3D case.
-    sensor::CompressedRangeData range_data_3d;
-
-    // Trajectory this node belongs to.
-    int trajectory_id;
+    // Range data in 'pose' frame.
+    sensor::CompressedRangeData range_data;
 
     // Transform from the 3D 'tracking' frame to the 'pose' frame of the range
     // data, which contains roll, pitch and height for 2D. In 3D this is always
@@ -50,8 +42,11 @@ struct TrajectoryNode {
   };
 
   common::Time time() const { return constant_data->time; }
+  bool trimmed() const { return constant_data == nullptr; }
 
-  const ConstantData* constant_data;
+  // This must be a shared_ptr. If the data is used for visualization while the
+  // node is being trimmed, it must survive until all use finishes.
+  std::shared_ptr<const Data> constant_data;
 
   transform::Rigid3d pose;
 };
