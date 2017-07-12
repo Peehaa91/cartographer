@@ -20,6 +20,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -459,24 +460,56 @@ class HybridGridBase : public Grid<ValueType> {
   const float resolution_;
 };
 
-
-class HybridDecayGrid : public HybridGridBase<std::pair<uint16,uint16>>{
-public:
+class HybridDecayGrid
+    : public HybridGridBase<std::tuple<uint16, uint16, double>> {
+ public:
   explicit HybridDecayGrid(const float resolution)
-      : HybridGridBase<std::pair<uint16,uint16>>(resolution) {}
+      : HybridGridBase<std::tuple<uint16, uint16, double>>(resolution) {}
 
   explicit HybridDecayGrid(const proto::HybridGrid& proto)
       : HybridDecayGrid(proto.resolution()) {
     CHECK_EQ(proto.values_size(), proto.x_indices_size());
     CHECK_EQ(proto.values_size(), proto.y_indices_size());
     CHECK_EQ(proto.values_size(), proto.z_indices_size());
-
-  }
-  void calculaeProbabilityValues()
-  {
-
   }
 
+  void increaseHitCount(Eigen::Array3i& index) {
+    std::tuple<uint16, uint16, double>* val = mutable_value(index);
+    std::get<1>(*val) += 1;
+  }
+
+  void increaseRayAccumulation(Eigen::Array3i& index, double& dist) {
+    std::tuple<uint16, uint16, double>* val = mutable_value(index);
+    std::get<2>(*val) += dist;
+  }
+  bool ApplyLookupTable(const Eigen::Array3i& index,
+                        const std::vector<uint16>& table) {
+    DCHECK_EQ(table.size(), mapping::kUpdateMarker);
+    uint16* const cell = &std::get<0>(*mutable_value(index));
+    if (*cell >= mapping::kUpdateMarker) {
+      return false;
+    }
+    update_indices_.push_back(cell);
+    *cell = table[*cell];
+    DCHECK_GE(*cell, mapping::kUpdateMarker);
+    return true;
+  }
+  // Finishes the update sequence.
+  void FinishUpdate() {
+    while (!update_indices_.empty()) {
+      DCHECK_GE(*update_indices_.back(), mapping::kUpdateMarker);
+      *update_indices_.back() -= mapping::kUpdateMarker;
+      update_indices_.pop_back();
+    }
+  }
+
+  // Returns the probability of the cell with 'index'.
+  float GetProbability(const Eigen::Array3i& index) const {
+    return mapping::ValueToProbability(std::get<0>(value(index)));
+  }
+ private:
+  // Markers at changed cells.
+  std::vector<uint16*> update_indices_;
 };
 
 // A grid containing probability values stored using 15 bits, and an update
@@ -501,10 +534,10 @@ class HybridGrid : public HybridGridBase<uint16> {
   }
 
   explicit HybridGrid(const HybridDecayGrid& hybrid_decay_grid)
-       : HybridGridBase<uint16>(hybrid_decay_grid.resolution()){
-    for (auto& it : hybrid_decay_grid){
-      SetProbability(Eigen::Vector3i(it.first.x(), it.first.y(),
-                                     it.first.z()), it.second.first);
+      : HybridGridBase<uint16>(hybrid_decay_grid.resolution()) {
+    for (auto& it : hybrid_decay_grid) {
+      SetProbability(Eigen::Vector3i(it.first.x(), it.first.y(), it.first.z()),
+                     std::get<0>(it.second));
     }
   }
 

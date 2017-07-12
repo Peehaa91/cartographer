@@ -104,7 +104,7 @@ TEST_F(RangeDataInserterTest, ProbabilityProgression) {
 
 class RangeDataDecayInserterTest : public RangeDataInserterTest {
   protected:
-  RangeDataDecayInserterTest() : hybrid_grid_(0.05f)
+  RangeDataDecayInserterTest() : hybrid_grid_(1.f)
   {
   auto parameter_dictionary = common::MakeDictionary(
       "return { "
@@ -119,7 +119,7 @@ class RangeDataDecayInserterTest : public RangeDataInserterTest {
   {
     const Eigen::Vector3f origin = Eigen::Vector3f(0.f, 0.f, -4.f);
     sensor::PointCloud returns = {
-        {-3.f, -1.f, 4.f}, {-2.f, 0.f, 4.f}, {-1.f, 1.f, 4.f}, {0.f, 2.f, 4.f}};
+        {-3.f, -1.f, 4.f}, {-2.f, 0.f, 4.f}, {-1.f, 1.f, 4.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 5.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 3.f}};
     range_data_inserter_->RayTracingInsert(sensor::RangeData{origin, returns, {}},
                                            &hybrid_grid_);
 

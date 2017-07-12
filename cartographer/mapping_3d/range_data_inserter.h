@@ -17,6 +17,8 @@
 #ifndef CARTOGRAPHER_MAPPING_3D_RANGE_DATA_INSERTER_H_
 #define CARTOGRAPHER_MAPPING_3D_RANGE_DATA_INSERTER_H_
 
+#include <math.h>
+
 #include "cartographer/mapping_3d/hybrid_grid.h"
 #include "cartographer/mapping_3d/proto/range_data_inserter_options.pb.h"
 #include "cartographer/sensor/point_cloud.h"
@@ -47,8 +49,8 @@ class RangeDataInserter {
   void RayTracingInsert(const sensor::RangeData& range_data,
 		  	  HybridDecayGrid* hybrid_grid) const;
 
-
  private:
+  void updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_grid) const;
   const proto::RangeDataInserterOptions options_;
   const std::vector<uint16> hit_table_;
   const std::vector<uint16> miss_table_;
