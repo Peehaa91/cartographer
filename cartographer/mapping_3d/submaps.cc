@@ -165,117 +165,12 @@ proto::SubmapsOptions CreateSubmapsOptions(
   return options;
 }
 
-SubmapDecay::SubmapDecay(const float high_resolution, const float low_resolution,
-               const transform::Rigid3d& local_pose)
-    : mapping::Submap(local_pose),
-      high_resolution_hybrid_grid_(high_resolution),
-      low_resolution_hybrid_grid_(low_resolution) {}
-
-SubmapDecay::SubmapDecay(const mapping::proto::Submap3D& proto)
-    : mapping::Submap(transform::ToRigid3(proto.local_pose())),
-      high_resolution_hybrid_grid_(proto.high_resolution_hybrid_grid()),
-      low_resolution_hybrid_grid_(proto.low_resolution_hybrid_grid()) {
-  SetNumRangeData(proto.num_range_data());
-  finished_ = proto.finished();
-}
-
-void SubmapDecay::ToProto(mapping::proto::Submap* const proto) const {
-  auto* const submap_3d = proto->mutable_submap_3d();
-  *submap_3d->mutable_local_pose() = transform::ToProto(local_pose());
-  submap_3d->set_num_range_data(num_range_data());
-  submap_3d->set_finished(finished_);
-  *submap_3d->mutable_high_resolution_hybrid_grid() =
-      HybridGrid(high_resolution_hybrid_grid()).ToProto();
-  *submap_3d->mutable_low_resolution_hybrid_grid() =
-      HybridGrid(low_resolution_hybrid_grid()).ToProto();
-}
-
-void SubmapDecay::ToResponseProto(
-    const transform::Rigid3d& global_submap_pose,
-        mapping::proto::SubmapQuery::Response* const response) const {
-      response->set_submap_version(num_range_data());
-      // Generate an X-ray view through the 'hybrid_grid', aligned to the xy-plane
-      // in the global map frame.
-      const float resolution = high_resolution_hybrid_grid_.resolution();
-      response->set_resolution(resolution);
-
-      // Compute a bounding box for the texture.
-      Eigen::Array2i min_index(INT_MAX, INT_MAX);
-      Eigen::Array2i max_index(INT_MIN, INT_MIN);
-      const std::vector<Eigen::Array4i> voxel_indices_and_probabilities =
-          ExtractVoxelData(HybridGrid(high_resolution_hybrid_grid_),
-                           global_submap_pose.cast<float>(), &min_index,
-                           &max_index);
-
-      const int width = max_index.y() - min_index.y() + 1;
-      const int height = max_index.x() - min_index.x() + 1;
-      response->set_width(width);
-      response->set_height(height);
-
-      const std::vector<PixelData> accumulated_pixel_data = AccumulatePixelData(
-          width, height, min_index, max_index, voxel_indices_and_probabilities);
-      const string cell_data = ComputePixelValues(accumulated_pixel_data);
-
-      common::FastGzipString(cell_data, response->mutable_cells());
-      *response->mutable_slice_pose() = transform::ToProto(
-          global_submap_pose.inverse() *
-          transform::Rigid3d::Translation(Eigen::Vector3d(
-              max_index.x() * resolution, max_index.y() * resolution,
-              global_submap_pose.translation().z())));
-}
-
-void SubmapDecay::InsertRangeData(const sensor::RangeData& range_data,
-                                  const RangeDataInserter& range_data_inserter,
-                                  int high_resolution_max_range) {
-  CHECK(!finished_);
-  const sensor::RangeData transformed_range_data = sensor::TransformRangeData(
-      range_data, local_pose().inverse().cast<float>());
-  range_data_inserter.Insert(
-      FilterRangeDataByMaxRange(transformed_range_data,
-                                high_resolution_max_range),
-      &high_resolution_hybrid_grid_);
-  range_data_inserter.Insert(transformed_range_data,
-                             &low_resolution_hybrid_grid_);
-  SetNumRangeData(num_range_data() + 1);
-}
-void SubmapDecay::Finish() {
-  CHECK(!finished_);
-  finished_ = true;
-}
-
-ActiveSubmapsDecay::ActiveSubmapsDecay(const proto::SubmapsOptions& options)
-    : options_(options),
-      range_data_inserter_(options.range_data_inserter_options()) {
-  // We always want to have at least one submap which we can return and will
-  // create it at the origin in absence of a better choice.
-  //
-  // TODO(whess): Start with no submaps, so that all of them can be
-  // approximately gravity aligned.
-  AddSubmap(transform::Rigid3d::Identity());
-}
-
-void ActiveSubmapsDecay::AddSubmap(const transform::Rigid3d& local_pose) {
-  if (submaps_.size() > 1) {
-    submaps_.front()->Finish();
-    ++matching_submap_index_;
-    submaps_.erase(submaps_.begin());
-  }
-  submaps_.emplace_back(new SubmapDecay(options_.high_resolution(),
-                                   options_.low_resolution(), local_pose));
-  LOG(INFO) << "Added submap " << matching_submap_index_ + submaps_.size();
-}
-
 Submap::Submap(const float high_resolution, const float low_resolution,
                const transform::Rigid3d& local_pose)
     : mapping::Submap(local_pose),
       high_resolution_hybrid_grid_(high_resolution),
       low_resolution_hybrid_grid_(low_resolution) {}
 
-Submap::Submap(const SubmapDecay* submap)
-    : mapping::Submap(submap->local_pose()),
-      high_resolution_hybrid_grid_(HybridGrid(submap->high_resolution_hybrid_grid())),
-      low_resolution_hybrid_grid_(HybridGrid(submap->low_resolution_hybrid_grid()))
-      {}
 
 Submap::Submap(const mapping::proto::Submap3D& proto)
     : mapping::Submap(transform::ToRigid3(proto.local_pose())),
@@ -350,6 +245,97 @@ void Submap::Finish() {
   finished_ = true;
 }
 
+SubmapDecay::SubmapDecay(const float high_resolution, const float low_resolution,
+               const transform::Rigid3d& local_pose)
+    : mapping_3d::Submap(high_resolution, low_resolution, local_pose),
+      high_resolution_hybrid_decay_grid_(high_resolution),
+      low_resolution_hybrid_decay_grid_(low_resolution),
+      high_resolution_hybrid_grid_(high_resolution),
+      low_resolution_hybrid_grid_(low_resolution){}
+
+SubmapDecay::SubmapDecay(const mapping::proto::Submap3D& proto)
+    : mapping_3d::Submap(proto),
+      high_resolution_hybrid_decay_grid_(proto.high_resolution_hybrid_grid()),
+      low_resolution_hybrid_decay_grid_(proto.low_resolution_hybrid_grid()),
+      high_resolution_hybrid_grid_(proto.high_resolution_hybrid_grid()),
+      low_resolution_hybrid_grid_(proto.low_resolution_hybrid_grid()){
+  SetNumRangeData(proto.num_range_data());
+  finished_ = proto.finished();
+}
+
+void SubmapDecay::ToProto(mapping::proto::Submap* const proto) const {
+  auto* const submap_3d = proto->mutable_submap_3d();
+  *submap_3d->mutable_local_pose() = transform::ToProto(local_pose());
+  submap_3d->set_num_range_data(num_range_data());
+  submap_3d->set_finished(finished_);
+  *submap_3d->mutable_high_resolution_hybrid_grid() =
+      high_resolution_hybrid_grid().ToProto();
+  *submap_3d->mutable_low_resolution_hybrid_grid() =
+      low_resolution_hybrid_grid().ToProto();
+}
+
+const HybridGrid& SubmapDecay::high_resolution_hybrid_grid() const {
+  return high_resolution_hybrid_grid_;
+}
+
+const HybridGrid& SubmapDecay::low_resolution_hybrid_grid() const {
+  return high_resolution_hybrid_grid_;
+}
+
+void SubmapDecay::ToResponseProto(
+    const transform::Rigid3d& global_submap_pose,
+        mapping::proto::SubmapQuery::Response* const response) const {
+      response->set_submap_version(num_range_data());
+      // Generate an X-ray view through the 'hybrid_grid', aligned to the xy-plane
+      // in the global map frame.
+      const float resolution = high_resolution_hybrid_decay_grid_.resolution();
+      response->set_resolution(resolution);
+
+      // Compute a bounding box for the texture.
+      Eigen::Array2i min_index(INT_MAX, INT_MAX);
+      Eigen::Array2i max_index(INT_MIN, INT_MIN);
+      const std::vector<Eigen::Array4i> voxel_indices_and_probabilities =
+          ExtractVoxelData(high_resolution_hybrid_grid_,
+                           global_submap_pose.cast<float>(), &min_index,
+                           &max_index);
+
+      const int width = max_index.y() - min_index.y() + 1;
+      const int height = max_index.x() - min_index.x() + 1;
+      response->set_width(width);
+      response->set_height(height);
+
+      const std::vector<PixelData> accumulated_pixel_data = AccumulatePixelData(
+          width, height, min_index, max_index, voxel_indices_and_probabilities);
+      const string cell_data = ComputePixelValues(accumulated_pixel_data);
+
+      common::FastGzipString(cell_data, response->mutable_cells());
+      *response->mutable_slice_pose() = transform::ToProto(
+          global_submap_pose.inverse() *
+          transform::Rigid3d::Translation(Eigen::Vector3d(
+              max_index.x() * resolution, max_index.y() * resolution,
+              global_submap_pose.translation().z())));
+}
+
+void SubmapDecay::InsertRangeData(const sensor::RangeData& range_data,
+                                  const RangeDataInserter& range_data_inserter,
+                                  int high_resolution_max_range) {
+  CHECK(!finished_);
+  const sensor::RangeData transformed_range_data = sensor::TransformRangeData(
+      range_data, local_pose().inverse().cast<float>());
+  range_data_inserter.Insert(
+      FilterRangeDataByMaxRange(transformed_range_data,
+                                high_resolution_max_range),
+      &high_resolution_hybrid_decay_grid_);
+  range_data_inserter.Insert(transformed_range_data,
+                             &low_resolution_hybrid_decay_grid_);
+  SetNumRangeData(num_range_data() + 1);
+  high_resolution_hybrid_grid_.updateWithDecayGrid(high_resolution_hybrid_decay_grid_);
+  low_resolution_hybrid_grid_.updateWithDecayGrid(low_resolution_hybrid_decay_grid_);
+}
+void SubmapDecay::Finish() {
+  CHECK(!finished_);
+  finished_ = true;
+}
 ActiveSubmaps::ActiveSubmaps(const proto::SubmapsOptions& options)
     : options_(options),
       range_data_inserter_(options.range_data_inserter_options()) {
@@ -387,6 +373,48 @@ void ActiveSubmaps::AddSubmap(const transform::Rigid3d& local_pose) {
     submaps_.erase(submaps_.begin());
   }
   submaps_.emplace_back(new Submap(options_.high_resolution(),
+                                   options_.low_resolution(), local_pose));
+  LOG(INFO) << "Added submap " << matching_submap_index_ + submaps_.size();
+}
+
+
+std::vector<std::shared_ptr<Submap>> ActiveSubmapsDecay::submaps() const {
+  return submaps_;
+}
+
+int ActiveSubmapsDecay::matching_index() const { return matching_submap_index_; }
+
+void ActiveSubmapsDecay::InsertRangeData(
+    const sensor::RangeData& range_data,
+    const Eigen::Quaterniond& gravity_alignment) {
+  for (auto& submap : submaps_) {
+    submap->InsertRangeData(range_data, range_data_inserter_,
+                            options_.high_resolution_max_range());
+  }
+  if (submaps_.back()->num_range_data() == options_.num_range_data()) {
+    AddSubmap(transform::Rigid3d(range_data.origin.cast<double>(),
+                                 gravity_alignment));
+  }
+}
+
+ActiveSubmapsDecay::ActiveSubmapsDecay(const proto::SubmapsOptions& options)
+    : options_(options),
+      range_data_inserter_(options.range_data_inserter_options()) {
+  // We always want to have at least one submap which we can return and will
+  // create it at the origin in absence of a better choice.
+  //
+  // TODO(whess): Start with no submaps, so that all of them can be
+  // approximately gravity aligned.
+  AddSubmap(transform::Rigid3d::Identity());
+}
+
+void ActiveSubmapsDecay::AddSubmap(const transform::Rigid3d& local_pose) {
+  if (submaps_.size() > 1) {
+    submaps_.front()->Finish();
+    ++matching_submap_index_;
+    submaps_.erase(submaps_.begin());
+  }
+  submaps_.emplace_back(new SubmapDecay(options_.high_resolution(),
                                    options_.low_resolution(), local_pose));
   LOG(INFO) << "Added submap " << matching_submap_index_ + submaps_.size();
 }

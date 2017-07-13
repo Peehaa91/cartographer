@@ -532,12 +532,11 @@ class HybridGrid : public HybridGridBase<uint16> {
     }
   }
 
-  explicit HybridGrid(const HybridDecayGrid& hybrid_decay_grid)
-      : HybridGridBase<uint16>(hybrid_decay_grid.resolution()) {
+  void updateWithDecayGrid(const HybridDecayGrid& hybrid_decay_grid){
     for (auto& it : hybrid_decay_grid) {
-      SetProbability(Eigen::Vector3i(it.first.x(), it.first.y(), it.first.z()),
-                     std::get<0>(it.second));
-    }
+          SetProbability(Eigen::Vector3i(it.first.x(), it.first.y(), it.first.z()),
+                         std::get<0>(it.second));
+        }
   }
 
   // Sets the probability of the cell at 'index' to the given 'probability'.
