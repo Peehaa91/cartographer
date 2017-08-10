@@ -43,12 +43,18 @@ class ImuTracker {
   // Query the current orientation estimate.
   Eigen::Quaterniond orientation() const { return orientation_; }
 
+  Eigen::Vector3d gravity_vector() const { return gravity_vector_; }
+
+  Eigen::Vector3d linear_acceleration() const { return linear_acceleration_; }
+
  private:
   const double imu_gravity_time_constant_;
   common::Time time_;
   common::Time last_linear_acceleration_time_;
   Eigen::Quaterniond orientation_;
   Eigen::Vector3d gravity_vector_;
+  Eigen::Vector3d linear_acceleration_;
+  Eigen::Vector3d first_gravity_;
   Eigen::Vector3d imu_angular_velocity_;
 };
 

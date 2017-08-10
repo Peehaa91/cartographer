@@ -52,6 +52,9 @@ const std::vector<float>* const kValueToProbability =
 
 std::vector<uint16> ComputeLookupTableToApplyOdds(const float odds) {
   std::vector<uint16> result;
+//  LOG(INFO)<<"odds: "<<odds<< " odds_cell: "<<Odds((*kValueToProbability)[ValueToProbability(0.1)]);
+  LOG(INFO)<<"prob table: "<<mapping::ProbabilityFromOdds(
+      odds * mapping::Odds((*kValueToProbability)[ValueToProbability(0.1)]));
   result.push_back(ProbabilityToValue(ProbabilityFromOdds(odds)) +
                    kUpdateMarker);
   for (int cell = 1; cell != 32768; ++cell) {

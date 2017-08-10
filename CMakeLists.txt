@@ -21,6 +21,7 @@ set(CARTOGRAPHER_MINOR_VERSION 0)
 set(CARTOGRAPHER_PATCH_VERSION 0)
 set(CARTOGRAPHER_VERSION ${CARTOGRAPHER_MAJOR_VERSION}.${CARTOGRAPHER_MINOR_VERSION}.${CARTOGRAPHER_PATCH_VERSION})
 set(CARTOGRAPHER_SOVERSION ${CARTOGRAPHER_MAJOR_VERSION}.${CARTOGRAPHER_MINOR_VERSION})
+#set(NURBS_DIR="/mrt/home/schnattinger/catkin_ws/src/nurbs")
 
 include("${PROJECT_SOURCE_DIR}/cmake/functions.cmake")
 google_initialize_cartographer_project()
@@ -31,6 +32,7 @@ find_package(Ceres REQUIRED COMPONENTS SparseLinearAlgebraLibrary)
 find_package(Eigen3 REQUIRED)
 find_package(LuaGoogle REQUIRED)
 find_package(Protobuf REQUIRED)
+#find_package(nurbs REQUIRED)
 
 include(FindPkgConfig)
 PKG_SEARCH_MODULE(CAIRO REQUIRED cairo>=1.12.16)
@@ -123,6 +125,10 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${LUA_LIBRARIES})
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
   "${Boost_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
+
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
+  "${NURBS_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME} PUBLIC ${NURBS_LIBRARIES})
 
 # We expect find_package(Ceres) to have located these for us.
 target_link_libraries(${PROJECT_NAME} PUBLIC glog)

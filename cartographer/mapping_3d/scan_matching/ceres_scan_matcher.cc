@@ -26,6 +26,7 @@
 #include "cartographer/mapping_3d/scan_matching/occupied_space_cost_functor.h"
 #include "cartographer/mapping_3d/scan_matching/rotation_delta_cost_functor.h"
 #include "cartographer/mapping_3d/scan_matching/translation_delta_cost_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_weight_cost_functor.h"
 #include "cartographer/transform/rigid_transform.h"
 #include "cartographer/transform/transform.h"
 #include "ceres/ceres.h"
@@ -80,7 +81,8 @@ CeresScanMatcher::CeresScanMatcher(
     : options_(options),
       ceres_solver_options_(
           common::CreateCeresSolverOptions(options.ceres_solver_options())) {
-  ceres_solver_options_.linear_solver_type = ceres::DENSE_QR;
+  ceres_solver_options_.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+  ceres_solver_options_.num_linear_solver_threads = options_.ceres_solver_options().num_threads();
 }
 
 void CeresScanMatcher::Match(const transform::Rigid3d& previous_pose,
@@ -99,7 +101,6 @@ void CeresScanMatcher::Match(const transform::Rigid3d& previous_pose,
           : std::unique_ptr<ceres::LocalParameterization>(
                 common::make_unique<ceres::QuaternionParameterization>()),
       &problem);
-
   CHECK_EQ(options_.occupied_space_weight_size(),
            point_clouds_and_hybrid_grids.size());
   for (size_t i = 0; i != point_clouds_and_hybrid_grids.size(); ++i) {
@@ -107,6 +108,7 @@ void CeresScanMatcher::Match(const transform::Rigid3d& previous_pose,
     const sensor::PointCloud& point_cloud =
         *point_clouds_and_hybrid_grids[i].first;
     const HybridGrid& hybrid_grid = *point_clouds_and_hybrid_grids[i].second;
+    LOG(INFO)<<"ceres before: "<<ceres_pose.ToRigid();
     problem.AddResidualBlock(
         new ceres::AutoDiffCostFunction<OccupiedSpaceCostFunctor,
                                         ceres::DYNAMIC, 3, 4>(
@@ -131,8 +133,57 @@ void CeresScanMatcher::Match(const transform::Rigid3d& previous_pose,
       nullptr, ceres_pose.rotation());
 
   ceres::Solve(ceres_solver_options_, &problem, summary);
-
+  LOG(INFO)<<"ceres after: "<<ceres_pose.ToRigid();
+//  LOG(INFO)<<summary->FullReport();
   *pose_estimate = ceres_pose.ToRigid();
+}
+
+void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
+                             const common::Time& begin,
+                             const common::Time& end,
+                             const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
+                             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>& nurbs,
+                             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_estimate,
+                             ceres::Solver::Summary* summary)
+{
+  ceres::Problem problem;
+  int number_of_residuals = 0;
+  for (const std::pair<common::Time, sensor::RangeData>& data : range_data_vec)
+    number_of_residuals += data.second.returns.size();
+  NurbsWeights<double, 1, 6, WeightType::RATIONAL>& weights = nurbs.getWeights();
+  boost::multi_array<double, 1> weights_vec = weights.getWeights();
+  std::array<double, 5> initial_weights;
+  for (int i = 0; i < weights_vec.size(); i++) {
+    initial_weights[i] = weights_vec[i];
+  }
+  const HybridGrid& hybrid_grid_copy = *hybrid_grid;
+  problem.AddResidualBlock(
+          new ceres:: NumericDiffCostFunction<NurbsWeightCostFunctor,
+          ceres::FORWARD,ceres::DYNAMIC, 5>(
+              new NurbsWeightCostFunctor(
+                  options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
+                  hybrid_grid_copy,
+                  begin,
+                  end,
+                  range_data_vec,
+                  nurbs), ceres::TAKE_OWNERSHIP,
+                  number_of_residuals),
+          nullptr, initial_weights.data());
+  for (int i = 0; i < weights_vec.size(); i++) {
+    problem.SetParameterLowerBound(initial_weights.data(), i, 0);
+    problem.SetParameterUpperBound(initial_weights.data(), i, 1);
+
+  }
+  std::unique_ptr<ceres::LocalParameterization> parametrization = common::make_unique<ceres:: HomogeneousVectorParameterization>(5);
+  problem.SetParameterization(initial_weights.data(),parametrization.release());
+  LOG(INFO)<<"number of threads:"<<ceres_solver_options_.num_threads;
+  ceres::Solve(ceres_solver_options_, &problem, summary);
+  LOG(INFO)<<summary->FullReport();
+  boost::multi_array<double, 1>& weights_estimate = nurbs_estimate->getWeights().getWeights();
+  for (int i = 0; i < initial_weights.size(); i++) {
+    weights_estimate[i] = initial_weights[i];
+    }
+
 }
 
 }  // namespace scan_matching

@@ -21,6 +21,7 @@
 #include "cartographer/mapping_3d/scan_matching/ceres_scan_matcher.h"
 #include "cartographer/mapping_3d/submaps.h"
 #include "cartographer/sensor/voxel_filter.h"
+#include "cartographer/mapping_3d/local_pose_graph.h"
 #include "glog/logging.h"
 
 namespace cartographer {
@@ -65,6 +66,8 @@ proto::LocalTrajectoryBuilderOptions CreateLocalTrajectoryBuilderOptions(
   CHECK_GT(options.num_odometry_states(), 0);
   *options.mutable_submaps_options() = mapping_3d::CreateSubmapsOptions(
       parameter_dictionary->GetDictionary("submaps").get());
+  *options.mutable_local_pose_graph_options() = mapping_3d::CreateLocalPoseGraphOptions(
+      parameter_dictionary->GetDictionary("local_pose_graph").get());
   return options;
 }
 

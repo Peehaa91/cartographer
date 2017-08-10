@@ -28,7 +28,8 @@ namespace {
 
 class RangeDataInserterTest : public ::testing::Test {
  protected:
-  RangeDataInserterTest() : hybrid_grid_(1.f) {
+  RangeDataInserterTest() :
+    hybrid_grid_(1.f) {
     auto parameter_dictionary = common::MakeDictionary(
         "return { "
         "hit_probability = 0.7, "
@@ -43,8 +44,8 @@ class RangeDataInserterTest : public ::testing::Test {
     const Eigen::Vector3f origin = Eigen::Vector3f(0.f, 0.f, -4.f);
     sensor::PointCloud returns = {
         {-3.f, -1.f, 4.f}, {-2.f, 0.f, 4.f}, {-1.f, 1.f, 4.f}, {0.f, 2.f, 4.f}};
-    range_data_inserter_->Insert(sensor::RangeData{origin, returns, {}},
-                                 &hybrid_grid_);
+//    range_data_inserter_->Insert(sensor::RangeData{origin, returns, {}},
+//                                 &hybrid_grid_);
   }
 
   float GetProbability(float x, float y, float z) const {
@@ -104,7 +105,10 @@ TEST_F(RangeDataInserterTest, ProbabilityProgression) {
 
 class RangeDataDecayInserterTest : public RangeDataInserterTest {
   protected:
-  RangeDataDecayInserterTest() : hybrid_grid_(1.f)
+  RangeDataDecayInserterTest() :
+    hybrid_decay_grid_(1.f),
+    hybrid_grid_(1.f),
+    hybrid_grid_2(1.f)
   {
   auto parameter_dictionary = common::MakeDictionary(
       "return { "
@@ -119,13 +123,25 @@ class RangeDataDecayInserterTest : public RangeDataInserterTest {
   {
     const Eigen::Vector3f origin = Eigen::Vector3f(0.f, 0.f, -4.f);
     sensor::PointCloud returns = {
-        {-3.f, -1.f, 4.f}, {-2.f, 0.f, 4.f}, {-1.f, 1.f, 4.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 5.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 3.f}};
+        {-3.f, -1.f, 3.f}};// {-3.f, -1.f, 4.f}};// {-2.f, 0.f, 4.f}, {-1.f, 1.f, 4.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 5.f}, {0.f, 2.f, 4.f}, {0.f, 2.f, 3.f}};
     range_data_inserter_->RayTracingInsert(sensor::RangeData{origin, returns, {}},
-                                           &hybrid_grid_);
-
+                                           &hybrid_decay_grid_, &hybrid_grid_);
+    Eigen::Array3i point = {-3, -1, 3};
+    LOG(INFO)<<"prob: "<<hybrid_decay_grid_.GetProbability(point);
+    while (hybrid_decay_grid_.GetProbability(point) < 0.89)
+    {
+      range_data_inserter_->RayTracingInsert(sensor::RangeData{origin, returns, {}},
+                                                 &hybrid_decay_grid_, &hybrid_grid_);
+      LOG(INFO)<<"prob: "<<hybrid_decay_grid_.GetProbability(point);
+    }
+//    Eigen::Array3i point = {-3, -1, 4};
+//    range_data_inserter_->Insert(sensor::RangeData{origin, returns, {}},
+//                                           &hybrid_grid_2);
   }
   private:
-   HybridDecayGrid hybrid_grid_;
+   HybridDecayGrid hybrid_decay_grid_;
+   HybridGrid hybrid_grid_;
+   HybridGrid hybrid_grid_2;
    std::unique_ptr<RangeDataInserter> range_data_inserter_;
    proto::RangeDataInserterOptions options_;
 };

@@ -19,6 +19,7 @@
 #include "Eigen/Core"
 #include "cartographer/mapping/probability_values.h"
 #include "glog/logging.h"
+#include <chrono>
 
 namespace cartographer {
 namespace mapping_3d {
@@ -31,6 +32,7 @@ void InsertMissesIntoGrid(const std::vector<uint16>& miss_table,
                           HybridGrid* hybrid_grid,
                           const int num_free_space_voxels) {
   const Eigen::Array3i origin_cell = hybrid_grid->GetCellIndex(origin);
+  int counter = 0;
   for (const Eigen::Vector3f& hit : returns) {
     const Eigen::Array3i hit_cell = hybrid_grid->GetCellIndex(hit);
 
@@ -46,12 +48,14 @@ void InsertMissesIntoGrid(const std::vector<uint16>& miss_table,
     // LOG(INFO)<<"origin: "<<origin_cell;
     for (int position = std::max(0, num_samples - num_free_space_voxels);
          position < num_samples; ++position) {
+      counter++;
       const Eigen::Array3i miss_cell =
           origin_cell + delta * position / num_samples;
       hybrid_grid->ApplyLookupTable(miss_cell, miss_table);
       //(INFO)<<"x: "<<miss_cell(0)<<" y: "<<miss_cell(1)<<" z: "<<miss_cell(2);
     }
   }
+//  LOG(INFO)<<"updated cells: "<<counter;
 }
 
 }  // namespace
@@ -91,33 +95,39 @@ void RangeDataInserter::Insert(const sensor::RangeData& range_data,
   // (i.e. no hits will be ignored because of a miss in the same cell).
   InsertMissesIntoGrid(miss_table_, range_data.origin, range_data.returns,
                        hybrid_grid, options_.num_free_space_voxels());
-  hybrid_grid->FinishUpdate();
+//  hybrid_grid->FinishUpdate();
 }
 
 void RangeDataInserter::Insert(const sensor::RangeData& range_data,
-                               HybridDecayGrid* hybrid_grid) const {
-  RayTracingInsert(range_data, hybrid_grid);
+                               HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const {
+//  LOG(INFO)<<"Ray Tracing started";
+//  RayTracingInsert(range_data, hybrid_decay_grid, hybrid_grid);
+//  hybrid_grid->updateWithDecayGrid(*hybrid_decay_grid);
+//  LOG(INFO)<<"Ray Traycing finished";
 }
 
 void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
-                                         HybridDecayGrid* hybrid_grid) const {
+                                         HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const {
   /// ----------  see OcTreeBase::computeRayKeys  -----------
 
   // Initialization phase
   // -------------------------------------------------------
-  Eigen::Array3i origin = hybrid_grid->GetCellIndex(range_data.origin);
+  uint line_size = options_.num_free_space_voxels();
+  Eigen::Array3i origin = hybrid_decay_grid->GetCellIndex(range_data.origin);
   std::vector<std::vector<Eigen::Array3i>> lines;
   for (const Eigen::Vector3f& hit : range_data.returns) {
-    Eigen::Array3f current_key =
-	    hybrid_grid->GetCellIndex(range_data.origin).cast<float>();
+    Eigen::Array3i current_key =
+	    hybrid_decay_grid->GetCellIndex(hit);
     std::vector<Eigen::Array3i> line;
-    Eigen::Array3i hit_cell = hybrid_grid->GetCellIndex(hit);
-    hybrid_grid->increaseHitCount(hit_cell);
-    LOG(INFO)<<"hit count: "<<std::get<1>(*(hybrid_grid->mutable_value(hit_cell)));
-    Eigen::Array3i direction = hit_cell - origin;
-    LOG(INFO) << "hit: " << hit_cell << std::endl
-              << " origin: " << origin << std::endl
-              << " direction: " << direction;
+    Eigen::Array3i hit_cell = hybrid_decay_grid->GetCellIndex(hit);
+    hybrid_decay_grid->increaseHitCount(hit_cell);
+    double distance = 0.5;
+    hybrid_decay_grid->increaseRayAccumulation(hit_cell, distance);
+    //LOG(INFO)<<"hit count: "<<std::get<1>(*(hybrid_grid->mutable_value(hit_cell)));
+    Eigen::Array3i direction = origin - hit_cell;
+//    LOG(INFO) << "hit: " << hit_cell << std::endl
+//              << " origin: " << origin << std::endl
+//              << " direction: " << direction;
     int step[3];
     double tMax[3];
     double tDelta[3];
@@ -146,12 +156,12 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
 
     // Incremental phase
     // ---------------------------------------------------------
-
+    line.push_back(hit_cell);
     bool done = false;
 
     while (!done) {
       unsigned int dim;
-      LOG(INFO) << "0: " << tMax[0] << " 1: " << tMax[1] << " 2: " << tMax[2];
+      //LOG(INFO) << "0: " << tMax[0] << " 1: " << tMax[1] << " 2: " << tMax[2];
       // find minimum tMax:
       if (tMax[0] < tMax[1]) {
         if (tMax[0] < tMax[2])
@@ -166,72 +176,128 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
       }
 
       // advance in direction "dim"
-      LOG(INFO) << "before "
-                << " cell_x: " << current_key(0) << std::endl
-                << " cell_y: " << current_key(1) << std::endl
-                << " cell_z: " << current_key(2);
+//      LOG(INFO) << "before "
+//                << " cell_x: " << current_key(0) << std::endl
+//                << " cell_y: " << current_key(1) << std::endl
+//                << " cell_z: " << current_key(2);
       current_key[dim] += step[dim];
       tMax[dim] += tDelta[dim];
 
       // generate world coords from key
-      Eigen::Array3i pos = current_key.cast<int>();
+      //Eigen::Array3i pos = current_key.cast<int>();
 
       // LOG(INFO)<<" cell_x: "<<current_key(0)<<std::endl<<" cell_y:
       // "<<current_key(1)
       //    <<std::endl<<" cell_z: "<<current_key(2);
-      line.push_back(pos);
-      if (pos(0) == hit_cell(0) && pos(1) == hit_cell(1) &&
-          pos(2) == hit_cell(2)) {
-        double dist = 0.5;
-        hybrid_grid->increaseRayAccumulation(pos, dist);
-        dist = std::get<2>(*(hybrid_grid->mutable_value(pos)));
-    	  LOG(INFO)<<"done";
+      line.insert(line.begin(), current_key);
+      if ((current_key(0) == origin(0) && current_key(1) == origin(1) &&
+          current_key(2) == origin(2)) || line.size() == line_size) {
+        double dist = 1;
+        hybrid_decay_grid->increaseRayAccumulation(current_key, dist);
+        dist = std::get<2>(*(hybrid_decay_grid->mutable_value(current_key)));
+    	//LOG(INFO)<<"done";
         done = true;
       }
       else {
         double dist = 1;
-        hybrid_grid->increaseRayAccumulation(pos, dist);
-        dist = std::get<2>(*(hybrid_grid->mutable_value(pos)));
-        LOG(INFO)<<"dist: "<<dist;
+        hybrid_decay_grid->increaseRayAccumulation(current_key, dist);
+        //LOG(INFO)<<"dist: "<<dist;
       }
     }
     // end while
     lines.push_back(line);
   }
-  updateProbabilities(lines, hybrid_grid);
+  //LOG(INFO)<<"intersct_done";
+  updateProbabilities(lines, hybrid_decay_grid, hybrid_grid );
+//  hybrid_grid->updateWithDecayGrid(*hybrid_decay_grid);
+  //LOG(INFO)<<"update prob done";
 }
-void RangeDataInserter::updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_grid) const
+
+float SlowValueToProbability(const uint16 value) {
+  CHECK_GE(value, 0);
+  CHECK_LE(value, 32767);
+  if (value == mapping::kUnknownProbabilityValue) {
+    // Unknown cells have kMinProbability.
+    return mapping::kMinProbability;
+  }
+  const float kScale = (mapping::kMaxProbability - mapping::kMinProbability) / 32766.f;
+  return value * kScale + (mapping::kMinProbability - kScale);
+}
+
+const std::vector<float>* PrecomputeValueToProbability() {
+  std::vector<float>* result = new std::vector<float>;
+  // Repeat two times, so that both values with and without the update marker
+  // can be converted to a probability.
+  for (int repeat = 0; repeat != 2; ++repeat) {
+    for (int value = 0; value != 32768; ++value) {
+      result->push_back(SlowValueToProbability(value));
+    }
+  }
+  return result;
+}
+const std::vector<float>* const kValueToProbability =
+    PrecomputeValueToProbability();
+void RangeDataInserter::updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const
 {
+  std::chrono::high_resolution_clock::time_point begin_time =
+  std::chrono::high_resolution_clock::now();
+  //LOG(INFO)<<"update prob called";
+  int count = 0;
   for (const std::vector<Eigen::Array3i>& line : lines)
   {
     double prob_multiplicator = 1;
-    int counter = 0;
-    for (const Eigen::Array3i& index : line)
+    uint counter = 0;
+    for ( std::vector<Eigen::Array3i>::const_iterator it = line.begin(); it != line.end(); it++)
     {
-      double dist;
+      double dist, prob;
       if (counter == line.size() - 1)
       {
         dist = 0.5;
-        LOG(INFO)<<"prob_before: "<<hybrid_grid->GetProbability(index);
+//        LOG(INFO)<<"hit: ";
+//        prob = options_.hit_probability();
+//        LOG(INFO)<<"hit";
+//        hybrid_decay_grid->ApplyLookupTable(*it, hit_table_);
       }
-      else
+      else{
+//        LOG(INFO)<<"miss: ";
+//        prob = options_.miss_probability();
+//        hybrid_decay_grid->ApplyLookupTable(*it, miss_table_);
         dist = 1;
-      std::tuple<uint16, uint16, double>* values = hybrid_grid->mutable_value(index);
+      }
+      std::tuple<uint16, uint16, double>* values = hybrid_decay_grid->mutable_value(*it);
+//      LOG(INFO)<<"val before: "<<std::get<0>(*values);
       double lambda = std::get<1>(*values)/std::get<2>(*values);
-      double prob = lambda * prob_multiplicator * exp(-lambda * dist);
+      prob = lambda * prob_multiplicator * exp(-lambda * dist);
       counter++;
       prob_multiplicator *= exp(-lambda * dist);
-      std::vector<uint16> table(mapping::ComputeLookupTableToApplyOdds(
-          mapping::Odds(prob)));
-      hybrid_grid->ApplyLookupTable(index, table);
-      if (counter == line.size())
-      {
-        LOG(INFO)<<"prob_after: "<<hybrid_grid->GetProbability(index)<<" index: "<<index;
-      }
+//      std::vector<uint16> table(mapping::ComputeLookupTableToApplyOdds(
+//          mapping::Odds(prob)));
+//      LOG(INFO)<<"pos: "<<*it;
+//      LOG(INFO)<<"update prob: "<<prob;
+//      if (prob < 0.1)
+//        prob = 0.1;
+//      hybrid_decay_grid->updateProbability(*it, prob, kValueToProbability);
+      hybrid_decay_grid->SetProbability(*it, prob);
+//      LOG(INFO)<<"index: "<<*it<<std::endl<<"prob: "<<hybrid_decay_grid->GetProbability(*it)<<" value: "<<std::get<0>(*values);
+      count++;
+      hybrid_grid->SetProbability(*it, hybrid_decay_grid->GetProbability(*it));
+//      hybrid_grid->ApplyLookupTable(*it, table);
+//      if (counter == line.size())
+//      {
+//        LOG(INFO)<<"prob_after: "<<hybrid_grid->GetProbability(index)<<" index: "<<index;
+//      }
 
     }
-    hybrid_grid->FinishUpdate();
+//    LOG(INFO)<<"line number: "<<count<<" from:"<<lines.size()<<" finished";
+//    count++;
+//    hybrid_grid->FinishUpdate();
+//    LOG(INFO)<<"finished called";
   }
+  auto duration = std::chrono::high_resolution_clock::now() - begin_time;
+  auto delta_t = std::chrono::duration_cast<std::chrono::microseconds>(
+      duration);
+  LOG(INFO)<<"prob update time: "<<delta_t.count();
+  LOG(INFO)<<"counter: "<<count;
 }
 }  // namespace mapping_3d
 }  // namespace cartographer

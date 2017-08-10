@@ -23,6 +23,7 @@
 #include "cartographer/sensor/point_cloud.h"
 #include "cartographer/transform/rigid_transform.h"
 #include "cartographer/transform/transform.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs.h"
 
 namespace cartographer {
 namespace mapping_3d {
@@ -52,6 +53,7 @@ class OccupiedSpaceCostFunctor {
         Eigen::Map<const Eigen::Matrix<T, 3, 1>>(translation),
         Eigen::Quaternion<T>(rotation[0], rotation[1], rotation[2],
                              rotation[3]));
+//    LOG(INFO)<<"transform: "<<transform;
     return Evaluate(transform, residual);
   }
 

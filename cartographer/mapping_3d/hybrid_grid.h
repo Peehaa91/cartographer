@@ -494,6 +494,31 @@ class HybridDecayGrid
     DCHECK_GE(*cell, mapping::kUpdateMarker);
     return true;
   }
+
+  void updateProbability(const Eigen::Array3i& index, const double& prob, const std::vector<float>* kValueToProbability)
+  {
+    float odds = mapping::Odds(prob);
+//    LOG(INFO)<<"odds: "<<odds;
+    uint16* const cell = &std::get<0>(*mutable_value(index));
+//    LOG(INFO)<<"index: "<<index<<"odds: val: "<< mapping::Odds((*kValueToProbability)[*cell])<<" prob cell: "<<mapping::ValueToProbability(*cell);
+//    LOG(INFO)<<"prob: "<<mapping::ProbabilityFromOdds(
+//        odds * mapping::Odds((*kValueToProbability)[*cell]));
+    if (*cell ==  0)
+    {
+      *cell = mapping::ProbabilityToValue(mapping::ProbabilityFromOdds(
+                                   odds));
+    }
+    else
+      *cell = mapping::ProbabilityToValue(mapping::ProbabilityFromOdds(
+                               odds * mapping::Odds((*kValueToProbability)[*cell])));
+//    LOG(INFO)<<"prob :"<<mapping::ValueToProbability(*cell);
+  }
+
+  // Sets the probability of the cell at 'index' to the given 'probability'.
+  void SetProbability(const Eigen::Array3i& index, const float probability) {
+    std::tuple<uint16, uint16, double>* val = mutable_value(index);
+    std::get<0>(*val) = mapping::ProbabilityToValue(probability);
+  }
   // Finishes the update sequence.
   void FinishUpdate() {
     while (!update_indices_.empty()) {
@@ -533,10 +558,15 @@ class HybridGrid : public HybridGridBase<uint16> {
   }
 
   void updateWithDecayGrid(const HybridDecayGrid& hybrid_decay_grid){
-    for (auto& it : hybrid_decay_grid) {
-          SetProbability(Eigen::Vector3i(it.first.x(), it.first.y(), it.first.z()),
-                         std::get<0>(it.second));
-        }
+    int counter = 0;
+    for (auto& it : hybrid_decay_grid) {;
+          //if (fabs(GetProbability((it.first)) - mapping::ValueToProbability(std::get<0>(it.second))) > 1e-3){
+            SetProbability(Eigen::Vector3i(it.first.x(), it.first.y(), it.first.z()),
+                           mapping::ValueToProbability(std::get<0>(it.second)));
+            counter ++;
+       // }
+    }
+    LOG(INFO)<<"updated "<<counter<<" cells";
   }
 
   // Sets the probability of the cell at 'index' to the given 'probability'.
@@ -564,11 +594,13 @@ class HybridGrid : public HybridGridBase<uint16> {
                         const std::vector<uint16>& table) {
     DCHECK_EQ(table.size(), mapping::kUpdateMarker);
     uint16* const cell = mutable_value(index);
-    if (*cell >= mapping::kUpdateMarker) {
-      return false;
-    }
+//    LOG(INFO)<<"cell_val :"<<*cell<<" prob val look: "<<mapping::ValueToProbability(table[*cell]);
+//    if (*cell >= mapping::kUpdateMarker) {
+//      return false;
+//    }
     update_indices_.push_back(cell);
-    *cell = table[*cell];
+    *cell = table[*cell] - mapping::kUpdateMarker;
+//    LOG(INFO)<<"prob look :"<<mapping::ValueToProbability(*cell -mapping::kUpdateMarker);
     DCHECK_GE(*cell, mapping::kUpdateMarker);
     return true;
   }
