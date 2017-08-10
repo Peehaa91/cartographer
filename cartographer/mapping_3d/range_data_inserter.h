@@ -43,14 +43,14 @@ class RangeDataInserter {
 
   // Inserts 'range_data' into 'hybrid_grid'.
   void Insert(const sensor::RangeData& range_data,
-              HybridDecayGrid* hybrid_grid) const;
+              HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
 
   // Inserts 'range data' via ray tracing into hybrid_grid
   void RayTracingInsert(const sensor::RangeData& range_data,
-		  	  HybridDecayGrid* hybrid_grid) const;
+		  	  HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
 
  private:
-  void updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_grid) const;
+  void updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
   const proto::RangeDataInserterOptions options_;
   const std::vector<uint16> hit_table_;
   const std::vector<uint16> miss_table_;

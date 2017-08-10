@@ -41,7 +41,6 @@ namespace mapping_3d {
 proto::SubmapsOptions CreateSubmapsOptions(
     common::LuaParameterDictionary* parameter_dictionary);
 
-
 class Submap : public mapping::Submap {
  public:
   Submap(float high_resolution, float low_resolution,
@@ -50,17 +49,19 @@ class Submap : public mapping::Submap {
 
   void ToProto(mapping::proto::Submap* proto) const override;
 
-  const HybridGrid& high_resolution_hybrid_grid() const {
+  virtual const HybridGrid& high_resolution_hybrid_grid() const {
     return high_resolution_hybrid_grid_;
   }
-  const HybridGrid& low_resolution_hybrid_grid() const {
+  virtual const HybridGrid& low_resolution_hybrid_grid() const {
     return low_resolution_hybrid_grid_;
   }
-  bool finished() const { return finished_; }
+  bool finished() const {
+    return finished_;
+  }
 
-  void ToResponseProto(
-      const transform::Rigid3d& global_submap_pose,
-      mapping::proto::SubmapQuery::Response* response) const override;
+  void ToResponseProto(const transform::Rigid3d& global_submap_pose,
+                       mapping::proto::SubmapQuery::Response* response) const
+                           override;
 
   // Insert 'range_data' into this submap using 'range_data_inserter'. The
   // submap must not be finished yet.
@@ -69,7 +70,7 @@ class Submap : public mapping::Submap {
                        int high_resolution_max_range);
   void Finish();
 
- private:
+ protected:
   HybridGrid high_resolution_hybrid_grid_;
   HybridGrid low_resolution_hybrid_grid_;
   bool finished_ = false;
@@ -78,20 +79,22 @@ class Submap : public mapping::Submap {
 class SubmapDecay : public mapping_3d::Submap {
  public:
   SubmapDecay(float high_resolution, float low_resolution,
-         const transform::Rigid3d& local_pose);
+              const transform::Rigid3d& local_pose);
   explicit SubmapDecay(const mapping::proto::Submap3D& proto);
 
   void ToProto(mapping::proto::Submap* proto) const override;
 
-  const HybridGrid& high_resolution_hybrid_grid() const;
+  const HybridGrid& high_resolution_hybrid_grid() const override;
 
-  const HybridGrid& low_resolution_hybrid_grid() const;
+  const HybridGrid& low_resolution_hybrid_grid() const override;
 
-  bool finished() const { return finished_; }
+  bool finished() const {
+    return finished_;
+  }
 
-  void ToResponseProto(
-      const transform::Rigid3d& global_submap_pose,
-      mapping::proto::SubmapQuery::Response* response) const override;
+  void ToResponseProto(const transform::Rigid3d& global_submap_pose,
+                       mapping::proto::SubmapQuery::Response* response) const
+                           override;
 
   // Insert 'range_data' into this submap using 'range_data_inserter'. The
   // submap must not be finished yet.
@@ -103,9 +106,6 @@ class SubmapDecay : public mapping_3d::Submap {
  private:
   HybridDecayGrid high_resolution_hybrid_decay_grid_;
   HybridDecayGrid low_resolution_hybrid_decay_grid_;
-  HybridGrid high_resolution_hybrid_grid_;
-  HybridGrid low_resolution_hybrid_grid_;
-  bool finished_ = false;
 };
 
 // Except during initialization when only a single submap exists, there are
@@ -167,15 +167,15 @@ class ActiveSubmapsDecay {
   void InsertRangeData(const sensor::RangeData& range_data,
                        const Eigen::Quaterniond& gravity_alignment);
 
-  std::vector<std::shared_ptr<Submap>> submaps() const;
+  std::vector<std::shared_ptr<SubmapDecay>> submaps() const;
  private:
   void AddSubmap(const transform::Rigid3d& local_pose);
 
   const proto::SubmapsOptions options_;
   int matching_submap_index_ = 0;
-  std::vector<std::shared_ptr<Submap>> submaps_;
+  std::vector<std::shared_ptr<SubmapDecay>> submaps_;
   RangeDataInserter range_data_inserter_;
-}; 
+};
 
 }  // namespace mapping_3d
 }  // namespace cartographer

@@ -26,6 +26,9 @@
 #include "cartographer/mapping_3d/scan_matching/proto/ceres_scan_matcher_options.pb.h"
 #include "cartographer/sensor/point_cloud.h"
 #include "cartographer/transform/rigid_transform.h"
+#include "cartographer/common/time.h"
+#include "cartographer/sensor/range_data.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs.h"
 
 namespace cartographer {
 namespace mapping_3d {
@@ -53,6 +56,14 @@ class CeresScanMatcher {
              const std::vector<PointCloudAndHybridGridPointers>&
                  point_clouds_and_hybrid_grids,
              transform::Rigid3d* pose_estimate,
+             ceres::Solver::Summary* summary);
+
+  void Match(const HybridGrid* hybrid_grid,
+             const common::Time& begin,
+             const common::Time& end,
+             const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
+             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>& nurbs,
+             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_estimate,
              ceres::Solver::Summary* summary);
 
  private:

@@ -226,6 +226,7 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
     velocity_estimate_ +=
         (pose_estimate_.translation() - model_prediction.translation()) /
         delta_t;
+    LOG(INFO)<<"velocity estimate: "<<velocity_estimate_;
   }
   last_scan_match_time_ = time_;
 

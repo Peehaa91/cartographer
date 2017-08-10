@@ -33,10 +33,10 @@ TRAJECTORY_BUILDER_3D = {
     max_range = MAX_3D_RANGE,
   },
 
-  use_online_correlative_scan_matching = false,
+  use_online_correlative_scan_matching = true,
   real_time_correlative_scan_matcher = {
-    linear_search_window = 0.15,
-    angular_search_window = math.rad(1.),
+    linear_search_window = 0.25,
+    angular_search_window = math.rad(2.),
     translation_delta_cost_weight = 1e-1,
     rotation_delta_cost_weight = 1e-1,
   },
@@ -50,7 +50,7 @@ TRAJECTORY_BUILDER_3D = {
     ceres_solver_options = {
       use_nonmonotonic_steps = false,
       max_num_iterations = 12,
-      num_threads = 1,
+      num_threads = 8,
     },
   },
 
@@ -73,5 +73,9 @@ TRAJECTORY_BUILDER_3D = {
       miss_probability = 0.49,
       num_free_space_voxels = 2,
     },
+  },
+  local_pose_graph = {
+   knot_type = "uniform", 
+   weight_type = "rational",
   },
 }

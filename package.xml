@@ -43,6 +43,7 @@
   <depend>libgflags-dev</depend>
   <depend>libgoogle-glog-dev</depend>
   <depend>lua5.2-dev</depend>
+  <depend>nurbs</depend>
   <depend>protobuf-dev</depend>
 
   <export>

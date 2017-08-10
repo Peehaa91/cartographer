@@ -76,11 +76,14 @@ RealTimeCorrelativeScanMatcher::GenerateExhaustiveSearchTransforms(
     for (int y = -linear_window_size; y <= linear_window_size; ++y) {
       for (int x = -linear_window_size; x <= linear_window_size; ++x) {
         for (int rz = -angular_window_size; rz <= angular_window_size; ++rz) {
-          for (int ry = -angular_window_size; ry <= angular_window_size; ++ry) {
-            for (int rx = -angular_window_size; rx <= angular_window_size;
-                 ++rx) {
-              const Eigen::Vector3f angle_axis(rx * angular_step_size,
-                                               ry * angular_step_size,
+//          for (int ry = -angular_window_size; ry <= angular_window_size; ++ry) {
+//            for (int rx = -angular_window_size; rx <= angular_window_size;
+//                 ++rx) {
+//              const Eigen::Vector3f angle_axis(rx * angular_step_size,
+//                                               ry * angular_step_size,
+//                                               rz * angular_step_size);
+              const Eigen::Vector3f angle_axis(0,
+                                               0,
                                                rz * angular_step_size);
               result.emplace_back(
                   Eigen::Vector3f(x * resolution, y * resolution,
@@ -89,8 +92,8 @@ RealTimeCorrelativeScanMatcher::GenerateExhaustiveSearchTransforms(
             }
           }
         }
-      }
-    }
+//      }
+//    }
   }
   return result;
 }

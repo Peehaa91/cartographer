@@ -19,6 +19,7 @@
 
 #include "cartographer/mapping/global_trajectory_builder_interface.h"
 #include "cartographer/mapping_3d/local_trajectory_builder.h"
+#include "cartographer/mapping_3d/continuous_local_trajectory_builder.h"
 #include "cartographer/mapping_3d/proto/local_trajectory_builder_options.pb.h"
 #include "cartographer/mapping_3d/sparse_pose_graph.h"
 
@@ -49,7 +50,8 @@ class GlobalTrajectoryBuilder
  private:
   const int trajectory_id_;
   mapping_3d::SparsePoseGraph* const sparse_pose_graph_;
-  LocalTrajectoryBuilder local_trajectory_builder_;
+  ContinuousLocalTrajectoryBuilder local_trajectory_builder_;
+//  LocalTrajectoryBuilder local_trajectory_builder_;
 };
 
 }  // namespace mapping_3d

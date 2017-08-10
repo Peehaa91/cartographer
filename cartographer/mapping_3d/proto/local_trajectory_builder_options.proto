@@ -19,6 +19,7 @@ import "cartographer/sensor/proto/adaptive_voxel_filter_options.proto";
 import "cartographer/mapping_2d/scan_matching/proto/real_time_correlative_scan_matcher_options.proto";
 import "cartographer/mapping_3d/proto/submaps_options.proto";
 import "cartographer/mapping_3d/scan_matching/proto/ceres_scan_matcher_options.proto";
+import "cartographer/mapping_3d/proto/local_pose_graph_options.proto";
 
 package cartographer.mapping_3d.proto;
 
@@ -63,4 +64,6 @@ message LocalTrajectoryBuilderOptions {
   optional int32 num_odometry_states = 16;
 
   optional SubmapsOptions submaps_options = 8;
+  
+  optional LocalPoseGraphOptions local_pose_graph_options = 18;
 }
