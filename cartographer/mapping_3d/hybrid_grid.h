@@ -511,6 +511,7 @@ class HybridDecayGrid
     else
       *cell = mapping::ProbabilityToValue(mapping::ProbabilityFromOdds(
                                odds * mapping::Odds((*kValueToProbability)[*cell])));
+//    *cell = mapping::ValueToProbability(*cell);
 //    LOG(INFO)<<"prob :"<<mapping::ValueToProbability(*cell);
   }
 

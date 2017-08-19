@@ -32,7 +32,7 @@ class NurbsWeightCostFunctor {
                            const common::Time& begin,
                            const common::Time& end,
                            const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec,
-                           Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>& nurbs)
+                           Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs)
       : scaling_factor_(scaling_factor),
         range_data_vec_(range_data_vec),
         interpolated_grid_(hybrid_grid),
@@ -47,16 +47,16 @@ class NurbsWeightCostFunctor {
   bool operator()(const double* const weights,
                   double* residual) const {
 //    LOG(INFO)<<"optimization called";
-    Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL> nurb_copy(nurbs_);
-    NurbsWeights<double, 1, 6, WeightType::RATIONAL>& weight = nurb_copy.getWeights();
+//    Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL> nurb_copy(nurbs_);
+    NurbsWeights<double, 1, 6, WeightType::RATIONAL>& weight = nurbs_->getWeights();
     boost::multi_array<double, 1>& weights_vec =  weight.getWeights();
     for (int i = 0; i < 5; i++)
     {
       weights_vec[i] = weights[i];
 //      LOG(INFO)<<"weight in opt: "<<weights[i];
     }
-    double minU = nurbs_.getMinU(0);
-    double maxU = nurbs_.getMaxU(0);
+//    double minU = nurbs_.getMinU(0);
+//    double maxU = nurbs_.getMaxU(0);
 
     int numSamplePoints = range_data_vec_.size();
     sensor::PointCloud complete_pointcloud;
@@ -67,7 +67,7 @@ class NurbsWeightCostFunctor {
       double point = common::ToSeconds(range_data_vec_[i].first - begin_)
           / common::ToSeconds(end_ - begin_);
       std::array<double, 6> output;
-      nurb_copy.getPoint(&point, output.begin());
+      nurbs_->getPoint(&point, output.begin());
       transform::Rigid3d pose = transform::Rigid3d(
           Eigen::Vector3d(output[0], output[1], output[2]),
           transform::AngleAxisVectorToRotationQuaternion(
@@ -101,7 +101,7 @@ class NurbsWeightCostFunctor {
   const common::Time begin_;
   const common::Time end_;
   const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec_;
-  Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL> nurbs_;
+  Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_;
 };
 
 }  // namespace scan_matching

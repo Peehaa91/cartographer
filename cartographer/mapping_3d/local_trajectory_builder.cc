@@ -176,8 +176,10 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
 
   std::shared_ptr<const Submap> matching_submap =
       active_submaps_.submaps().front();
+  LOG(INFO)<<"before inverse: "<<pose_prediction;
   transform::Rigid3d initial_ceres_pose =
       matching_submap->local_pose().inverse() * pose_prediction;
+  LOG(INFO)<<"after inverse: "<<initial_ceres_pose;
   sensor::AdaptiveVoxelFilter adaptive_voxel_filter(
       options_.high_resolution_adaptive_voxel_filter_options());
   const sensor::PointCloud filtered_point_cloud_in_tracking =

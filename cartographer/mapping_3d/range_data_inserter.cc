@@ -121,7 +121,7 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
     std::vector<Eigen::Array3i> line;
     Eigen::Array3i hit_cell = hybrid_decay_grid->GetCellIndex(hit);
     hybrid_decay_grid->increaseHitCount(hit_cell);
-    double distance = 0.5;
+    double distance = 0.3;
     hybrid_decay_grid->increaseRayAccumulation(hit_cell, distance);
     //LOG(INFO)<<"hit count: "<<std::get<1>(*(hybrid_grid->mutable_value(hit_cell)));
     Eigen::Array3i direction = origin - hit_cell;
@@ -194,8 +194,6 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
           current_key(2) == origin(2)) || line.size() == line_size) {
         double dist = 1;
         hybrid_decay_grid->increaseRayAccumulation(current_key, dist);
-        dist = std::get<2>(*(hybrid_decay_grid->mutable_value(current_key)));
-    	//LOG(INFO)<<"done";
         done = true;
       }
       else {
@@ -252,8 +250,7 @@ void RangeDataInserter::updateProbabilities(const std::vector<std::vector<Eigen:
       double dist, prob;
       if (counter == line.size() - 1)
       {
-        dist = 0.5;
-//        LOG(INFO)<<"hit: ";
+        dist = 0.3;
 //        prob = options_.hit_probability();
 //        LOG(INFO)<<"hit";
 //        hybrid_decay_grid->ApplyLookupTable(*it, hit_table_);
@@ -268,16 +265,23 @@ void RangeDataInserter::updateProbabilities(const std::vector<std::vector<Eigen:
 //      LOG(INFO)<<"val before: "<<std::get<0>(*values);
       double lambda = std::get<1>(*values)/std::get<2>(*values);
       prob = lambda * prob_multiplicator * exp(-lambda * dist);
+      if (prob > 1)
+      {
+//        LOG(ERROR)<<"prob: "<<prob<<" lambda: "<<lambda<<" prob_mult: "<<prob_multiplicator<<" dist: "<<dist;
+        prob = 0.9;
+      }
+      else if (prob < 0.1)
+        prob = 0.1;
       counter++;
       prob_multiplicator *= exp(-lambda * dist);
 //      std::vector<uint16> table(mapping::ComputeLookupTableToApplyOdds(
 //          mapping::Odds(prob)));
 //      LOG(INFO)<<"pos: "<<*it;
-//      LOG(INFO)<<"update prob: "<<prob;
+ //     LOG(INFO)<<"update prob: "<<prob;
 //      if (prob < 0.1)
 //        prob = 0.1;
-//      hybrid_decay_grid->updateProbability(*it, prob, kValueToProbability);
-      hybrid_decay_grid->SetProbability(*it, prob);
+      hybrid_decay_grid->updateProbability(*it, prob, kValueToProbability);
+//      hybrid_decay_grid->SetProbability(*it, prob);
 //      LOG(INFO)<<"index: "<<*it<<std::endl<<"prob: "<<hybrid_decay_grid->GetProbability(*it)<<" value: "<<std::get<0>(*values);
       count++;
       hybrid_grid->SetProbability(*it, hybrid_decay_grid->GetProbability(*it));

@@ -45,6 +45,7 @@ std::vector<PoseAndRangeData> LocalPoseGraph::createSplineFromControlVector(
   boost::multi_array<std::array<double, output_dim>, input_dim> points(
       boost::extents[pose_vec.size()]);
   for (int i = 0; i < pose_vec.size(); i++) {
+    LOG(INFO)<<"pose "<<i<<": "<<pose_vec[i].pose;
     points[i][0] = pose_vec[i].pose.translation().x();
     points[i][1] = pose_vec[i].pose.translation().y();
     points[i][2] = pose_vec[i].pose.translation().z();
@@ -56,7 +57,7 @@ std::vector<PoseAndRangeData> LocalPoseGraph::createSplineFromControlVector(
     points[i][5] = angles(2);
 
   }
-
+  LOG(INFO)<<"pose before: "<<pose_vec.back().pose;
   LOG(INFO)<<"size: "<<range_data_vec.size();
   NurbsKnots<double, input_dim, output_dim, knot_type> knots;
   knots.create(degree, points.shape());
@@ -84,6 +85,15 @@ std::vector<PoseAndRangeData> LocalPoseGraph::createSplineFromControlVector(
                             nurbs,
                             &nurbs,
                             &summary);
+  points= nurbs.getPoints();
+  for (int i = 0; i < 5; i++)
+  {
+    transform::Rigid3d pose = transform::Rigid3d(
+        Eigen::Vector3d(points[i][0], points[i][1], points[i][2]),
+        transform::AngleAxisVectorToRotationQuaternion(
+            Eigen::Vector3d(points[i][3], points[i][4], points[i][5])));
+    LOG(INFO)<<"pose: "<<i<<" after"<<pose;
+  }
   boost::multi_array<double, 1>& weights_estimate = nurbs.getWeights().getWeights();
   for (int i = 0; i < weights_estimate.size(); i++) {
     LOG(INFO)<<"weight: "<<weights_estimate[i];

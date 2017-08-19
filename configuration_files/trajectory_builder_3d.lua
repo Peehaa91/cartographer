@@ -50,7 +50,7 @@ TRAJECTORY_BUILDER_3D = {
     ceres_solver_options = {
       use_nonmonotonic_steps = false,
       max_num_iterations = 12,
-      num_threads = 8,
+      num_threads = 100,
     },
   },
 
@@ -67,7 +67,7 @@ TRAJECTORY_BUILDER_3D = {
     high_resolution = 0.10,
     high_resolution_max_range = 20.,
     low_resolution = 0.45,
-    num_range_data = 160,
+    num_range_data = 32,
     range_data_inserter = {
       hit_probability = 0.55,
       miss_probability = 0.49,
