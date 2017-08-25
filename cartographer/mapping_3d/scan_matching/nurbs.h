@@ -76,15 +76,16 @@ namespace NurbsCeresPrivate {
   template <typename KnotIterT>
   void createUniformKnot(int numPoint, int degree, KnotIterT knotIter) {
     assert(numPoint >= degree - 1);
-    std::fill(knotIter, knotIter + degree, 0.0);
+    typedef typename std::remove_reference<decltype(*knotIter)>::type value_type;
+    std::fill(knotIter, knotIter + degree, (value_type)0.0);
 
     knotIter = knotIter + degree;
     auto totalSteps = numPoint - degree + 1;
     for (int i = 0; i < totalSteps; ++i, ++knotIter) {
-      *knotIter = (double)i / (double)(totalSteps - 1);
+      *knotIter = (value_type)i / (value_type)(totalSteps - 1);
     }
 
-    std::fill(knotIter, knotIter + degree, 1.0);
+    std::fill(knotIter, knotIter + degree, (value_type)1.0);
   }
 
   template <typename T, std::size_t inputDim, std::size_t curDim>
@@ -275,9 +276,8 @@ public:
       const typename std::iterator_traits<PointsIter>::reference pointDim,
       const typename std::iterator_traits<DegreesIter>::reference degree) {
 
-      return T(1.0) / T(pointDim - degree);
+      return (1.0) / (pointDim - degree);
     });
-
     for (int i = 0; i < (int)inputDim; ++i) {
       const auto& numPoint = *numPointsBeginIter;
 
@@ -292,49 +292,128 @@ public:
     }
   }
 
-  int getKnotIdx(int dim, int degree, T u) const {
-    auto idx = degree + (int)(u / knotDeltas_[dim]);
-    if (idx == pointDims_[dim]) {
-      idx = pointDims_[dim] - 1;
+//  int getKnotIdx(int dim, int degree, T u) const {
+//    auto idx = degree + (int)(u / knotDeltas_[dim]);
+//    if (idx == pointDims_[dim]) {
+//      idx = pointDims_[dim] - 1;
+//    }
+//    assert(idx >= degree && idx < pointDims_[dim]);
+//    return idx;
+//  }
+
+  int getKnotIdx(int dim, int degree, double u) const {
+    auto idx = (degree) + (int)(u / knotDeltas_[dim]);
+    if (idx == (pointDims_[dim])) {
+      idx = (pointDims_[dim] - 1);
     }
-    assert(idx >= degree && idx < pointDims_[dim]);
+    assert(idx >= (degree) && idx < (pointDims_[dim]));
     return idx;
   }
 
+//  template <typename OutIter>
+//  void computeBasis(int k, int dim, int degree, T u, OutIter n) const {
+//    n[0] = T(1.0);
+//
+//    if (k < 2 * degree - 1 || k >= pointDims_[dim] - degree + 1) {
+//      //this can be done more efficient
+//      const auto& knot = knots_[dim];
+//      for (int i = 1; i <= degree; ++i) {
+//        n[i] = T(0.0);
+//
+//        for (int j = i - 1; j >= 0; --j) {
+//          T a = T(0.0);
+//          if (knot[k + i - j] != knot[k - j]) {
+//            a = (u - knot[k - j]) / (knot[k + i - j] - knot[k - j]);
+//          }
+//
+//          n[j + 1] += n[j] * (T(1.0) - a);
+//          n[j] = n[j] * a;
+//        }
+//      }
+//    } else {
+//      auto m = u / knotDeltas_[dim] - (T(k - degree));
+//
+//      for (int i = 1; i <= degree; ++i) {
+//        n[i] = T(0.0);
+//
+//        for (int j = i - 1; j >= 0; --j) {
+//          auto a = (m + T(j)) / T(i);
+//          n[j + 1] += n[j] * (T(1.0) - a);
+//          n[j] = n[j] * a;
+//        }
+//      }
+//    }
+//  }
+
   template <typename OutIter>
-  void computeBasis(int k, int dim, int degree, T u, OutIter n) const {
-    n[0] = T(1.0);
+    void computeBasis(int k, int dim, int degree, double u, OutIter n) const {
+      n[0] = T(1.0);
 
-    if (k < 2 * degree - 1 || k >= pointDims_[dim] - degree + 1) {
-      //this can be done more efficient
-      const auto& knot = knots_[dim];
-      for (int i = 1; i <= degree; ++i) {
-        n[i] = T(0.0);
+      if (k < 2 * degree - 1 || k >= pointDims_[dim] - degree + 1) {
+        //this can be done more efficient
+        const auto& knot = knots_[dim];
+        for (int i = 1; i <= degree; ++i) {
+          n[i] = T(0.0);
 
-        for (int j = i - 1; j >= 0; --j) {
-          T a = T(0.0);
-          if (knot[k + i - j] != knot[k - j]) {
-            a = (u - knot[k - j]) / (knot[k + i - j] - knot[k - j]);
+          for (int j = i - 1; j >= 0; --j) {
+            T a = T(0.0);
+            if (knot[k + i - j] != knot[k - j]) {
+              a = (u - knot[k - j]) / (knot[k + i - j] - knot[k - j]);
+            }
+
+            n[j + 1] += n[j] * (T(1.0) - a);
+            n[j] = n[j] * a;
           }
-
-          n[j + 1] += n[j] * (T(1.0) - a);
-          n[j] = n[j] * a;
         }
-      }
-    } else {
-      auto m = u / knotDeltas_[dim] - (T(k - degree));
+      } else {
+        auto m = u / knotDeltas_[dim] - (T(k - degree));
 
-      for (int i = 1; i <= degree; ++i) {
-        n[i] = T(0.0);
+        for (int i = 1; i <= degree; ++i) {
+          n[i] = T(0.0);
 
-        for (int j = i - 1; j >= 0; --j) {
-          auto a = (m + T(j)) / T(i);
-          n[j + 1] += n[j] * (T(1.0) - a);
-          n[j] = n[j] * a;
+          for (int j = i - 1; j >= 0; --j) {
+            auto a = (m + T(j)) / T(i);
+            n[j + 1] += n[j] * (T(1.0) - a);
+            n[j] = n[j] * a;
+          }
         }
       }
     }
-  }
+//  template <typename OutIter>
+//  void computeBasis(T k, int dim, int degree, T u, OutIter n) const {
+//    n[0] = T(1.0);
+//
+//    if (k < T(2 * degree - 1) || k >= T(pointDims_[dim] - degree + 1)) {
+//      //this can be done more efficient
+//      const auto& knot = knots_[dim];
+//      for (T i = T(1); i <= T(degree); i + T(1)) {
+//        n[i] = T(0.0);
+//
+//        for (T j = i - T(1); j >= T(0); j - T(1)) {
+//          T a = T(0.0);
+//          if (knot[k + i - j] != knot[k - j]) {
+//            a = (u - knot[k - j]) / (knot[k + i - j] - knot[k - j]);
+//          }
+//
+//          n[j + 1] += n[j] * (T(1.0) - a);
+//          n[j] = n[j] * a;
+//        }
+//      }
+//    } else {
+//      auto m = u / knotDeltas_[dim] - (T(k - degree));
+//
+//      for (T i = T(1); i <= T(degree); i + T(1)) {
+//        n[i] = T(0.0);
+//
+//        for (T j = i - T(1); j >= 0; j - T(1)) {
+//          auto a = (m + T(j)) / T(i);
+//          n[j + 1] += n[j] * (T(1.0) - a);
+//          n[j] = n[j] * a;
+//        }
+//      }
+//    }
+//  }
+
 
   T getMinU(int /*inputD*/) const {
     return T(0.0);
@@ -352,7 +431,7 @@ public:
 private:
   std::array<int, inputDim> pointDims_;
   std::array<int, inputDim> degrees_;
-  std::array<T, inputDim> knotDeltas_;
+  std::array<double, inputDim> knotDeltas_;
 
   KnotsT knots_;
 };
@@ -426,7 +505,7 @@ public:
 
     auto resP = pBegin;
 
-                if(weightSum == 0) weightSum = 1;
+                if(weightSum == T(0)) weightSum = T(1);
 
     for (int i = 0; i < (int)outputDim; ++i) {
       *resP /= weightSum;
@@ -609,6 +688,7 @@ public:
       n.resize(degree + 1);
 
       k = knots_.getKnotIdx(dim, degree, u);
+      //T k_templated = knots_.getKnotIdx(dim, degree, u);;
       knots_.computeBasis(k, dim, degree, u, n.begin());
       assert(isBaseCorrect(n.begin(), n.end()));
 

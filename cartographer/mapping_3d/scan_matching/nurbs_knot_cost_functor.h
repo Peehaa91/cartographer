@@ -33,7 +33,7 @@ class NurbsKnotCostFunctor {
       const common::Time& begin,
       const common::Time& end,
       const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec,
-      Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs)
+      Nurbs<double, 1, 7, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs)
       : scaling_factor_(scaling_factor),
         range_data_vec_(range_data_vec),
         interpolated_grid_(hybrid_grid),
@@ -55,7 +55,7 @@ class NurbsKnotCostFunctor {
 //    LOG(INFO)<<"point_5: "<<point_5[0]<<","<<point_5[1]<<","<<point_5[2]<<","<<point_5[3]<<","<<point_5[4]<<","<<point_5[5];
 
     std::vector<const double*> vec = {point_1, point_2, point_3, point_4, point_5};
-    boost::multi_array<std::array<double, 6>, 1>& points = nurbs_->getPoints();
+    boost::multi_array<std::array<double, 7>, 1>& points = nurbs_->getPoints();
     for (int i = 0; i < vec.size(); i++) {
       points[i][0] = vec[i][0];
       points[i][1] = vec[i][1];
@@ -63,6 +63,7 @@ class NurbsKnotCostFunctor {
       points[i][3] = vec[i][3];
       points[i][4] = vec[i][4];
       points[i][5] = vec[i][5];
+      points[i][6] = vec[i][6];
 
     }
     int numSamplePoints = range_data_vec_.size();
@@ -73,12 +74,13 @@ class NurbsKnotCostFunctor {
   //        + (maxU - minU) / (double) (numSamplePoints - 1) * (double) i;
       double point = common::ToSeconds(range_data_vec_[i].first - begin_)
           / common::ToSeconds(end_ - begin_);
-      std::array<double, 6> output;
+      std::array<double, 7> output;
       nurbs_->getPoint(&point, output.begin());
       transform::Rigid3d pose = transform::Rigid3d(
           Eigen::Vector3d(output[0], output[1], output[2]),
-          transform::AngleAxisVectorToRotationQuaternion(
-              Eigen::Vector3d(output[3], output[4], output[5])));
+          Eigen::Quaterniond(output[6], output[3], output[4], output[5]));
+//          transform::AngleAxisVectorToRotationQuaternion(
+//              Eigen::Vector3d(output[3], output[4], output[5])));
 //      sensor::PointCloud pointcloud = sensor::TransformPointCloud(range_data_vec_[i].second.returns,
       for (Eigen::Vector3f point : range_data_vec_[i].second.returns)
       {
@@ -111,7 +113,7 @@ private:
   const common::Time begin_;
   const common::Time end_;
   const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec_;
-  Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_;
+  Nurbs<double, 1, 7, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_;
 };
 }
 }

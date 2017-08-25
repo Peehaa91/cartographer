@@ -71,6 +71,7 @@ class ContinuousLocalTrajectoryBuilder {
   LocalPoseGraph local_pose_graph_;
   int num_accumulated_ = 0;
   int control_point_counter_ = 0;
+  Eigen::Vector3d vel_est_;
   transform::Rigid3f first_pose_estimate_ = transform::Rigid3f::Identity();
   transform::Rigid3d pose_estimate_ = transform::Rigid3d::Identity();
   sensor::RangeData accumulated_range_data_;

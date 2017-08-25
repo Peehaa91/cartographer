@@ -140,13 +140,13 @@ class RangeDataDecayInserterTest : public RangeDataInserterTest {
     point = {-3, -1, 4};
     Eigen::Array3i point2 = {-3, -1, 3};
     returns = {
-            {-3.f, -1.f, 4.f}};
-    while (hybrid_decay_grid_.GetProbability(point) < 0.89)
+            {-3.f, -1.f, 4.f}, {-3.f, -1.f, 3.f}};
+    while (hybrid_decay_grid_.GetProbability(point2) > 0.5)
     {
       range_data_inserter_->RayTracingInsert(sensor::RangeData{origin, returns, {}},
                                                  &hybrid_decay_grid_, &hybrid_grid_);
       LOG(WARNING)<<"prob: "<<hybrid_decay_grid_.GetProbability(point2);
-      LOG(WARNING)<<"prob hit: "<<hybrid_grid_.GetProbability(point);
+      LOG(WARNING)<<"prob hit: "<<hybrid_grid_.GetProbability(point2);
     }
 //    Eigen::Array3i point = {-3, -1, 4};
 //    range_data_inserter_->Insert(sensor::RangeData{origin, returns, {}},

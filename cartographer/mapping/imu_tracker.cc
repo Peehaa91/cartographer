@@ -78,7 +78,7 @@ void ImuTracker::AddImuLinearAccelerationObservation(
 //    linear_acceleration_ = imu_linear_acceleration - orientation_.inverse() * first_gravity_;
 //    LOG(INFO)<<"acc: "<<linear_acceleration_;
 //  }
-  linear_acceleration_ = - gravity_vector_ +  imu_linear_acceleration;
+  linear_acceleration_ = orientation_.inverse() * first_gravity_ -  imu_linear_acceleration;
   CHECK_GT((orientation_ * gravity_vector_).z(), 0.);
   CHECK_GT((orientation_ * gravity_vector_).normalized().z(), 0.99);
 }

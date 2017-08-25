@@ -101,6 +101,7 @@ class LocalTrajectoryBuilder {
   std::unique_ptr<mapping_3d::GroundPlaneTracker> ground_plane_tracker_;
   mapping::OdometryStateTracker odometry_state_tracker_;
 
+  Eigen::Vector3d vel_est_ = Eigen::Vector3d::Zero();
   int num_accumulated_ = 0;
   transform::Rigid3f first_pose_estimate_ = transform::Rigid3f::Identity();
   sensor::RangeData accumulated_range_data_;

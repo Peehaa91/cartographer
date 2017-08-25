@@ -476,11 +476,14 @@ class HybridDecayGrid
   void increaseHitCount(Eigen::Array3i& index) {
     std::tuple<uint16, uint16, double>* val = mutable_value(index);
     std::get<1>(*val) += 1;
+    if (std::get<2>(*val) != 0)
+      std::get<0>(*val) = mapping::ProbabilityToValue(decayRateToProbability(std::get<1>(*val)/std::get<2>(*val)));
   }
 
   void increaseRayAccumulation(Eigen::Array3i& index, double& dist) {
     std::tuple<uint16, uint16, double>* val = mutable_value(index);
     std::get<2>(*val) += dist;
+    std::get<0>(*val) = mapping::ProbabilityToValue(decayRateToProbability(std::get<1>(*val)/std::get<2>(*val)));
   }
   bool ApplyLookupTable(const Eigen::Array3i& index,
                         const std::vector<uint16>& table) {
@@ -533,7 +536,20 @@ class HybridDecayGrid
   float GetProbability(const Eigen::Array3i& index) const {
     return mapping::ValueToProbability(std::get<0>(value(index)));
   }
+
+  // Returns the probability of the cell with 'index'.
+  double GetProbabilityFromDecay(const Eigen::Array3i& index) const {
+    double rate  = std::get<1>(value(index))/std::get<2>(value(index));
+    double prob = decayRateToProbability(rate);
+    return prob;
+  }
  private:
+  double decayRateToProbability(double rate) const{
+//    LOG(INFO)<<"rate: "<<rate;
+    const double prob = (rate + 0.25)*0.4;
+//    LOG(INFO)<<"prob: "<<prob;
+    return prob;
+  }
   // Markers at changed cells.
   std::vector<uint16*> update_indices_;
 };

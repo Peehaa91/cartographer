@@ -75,6 +75,7 @@ void ContinuousLocalTrajectoryBuilder::AddPlaneData(
 
 void ContinuousLocalTrajectoryBuilder::Predict(common::Time time) {
   CHECK(imu_tracker_ != nullptr);
+  CHECK_LE(last_update_time_, time);
   const Eigen::Quaterniond last_orientation = imu_tracker_->orientation();
   imu_tracker_->Advance(time);
   if (last_update_time_ > common::Time::min()) {
@@ -89,6 +90,8 @@ void ContinuousLocalTrajectoryBuilder::Predict(common::Time time) {
 //    velocity_estimate_ += acceleration_estimate_ * delta_t;
 //      last_pose_estimate_ = PoseEstimate(time, pose,  {});
     pose_estimate_ = pose;
+//    vel_est_ += imu_tracker_->linear_acceleration() * delta_t;
+//    LOG(INFO)<<"vel_est: "<<vel_est_;
   }
   last_update_time_ = time;
 }
@@ -101,6 +104,14 @@ std::unique_ptr<LocalTrajectoryBuilder::InsertionResult> ContinuousLocalTrajecto
     return nullptr;
   }
   Predict(time);
+  if (first_scan_){
+     LOG(INFO)<<"first scan";
+     scan_matcher_submap_ =
+     active_submaps_.submaps().front();
+     PoseEstimate control_point = {time, scan_matcher_submap_->local_pose().inverse()*pose_estimate_, {}};
+     pose_vec_.push_back(control_point);
+     first_scan_ = false;
+   }
 //  if ((range_data_vector_.empty() && pose_vec_.empty())){// || control_point_counter_ == 32){
 //    pose_vec_.push_back( {time, pose_estimate_, {}});
 //    control_point_counter_ = 0;
@@ -163,12 +174,6 @@ std::unique_ptr<LocalTrajectoryBuilder::InsertionResult> ContinuousLocalTrajecto
     sensor::VoxelFiltered(range_data_in_tracking.misses,
         options_.voxel_filter_size())};
 
-  if (first_scan_){
-    LOG(INFO)<<"first scan";
-    scan_matcher_submap_ =
-    active_submaps_.submaps().front();
-    first_scan_ = false;
-  }
   scan_matcher_submap_ =
   active_submaps_.submaps().front();
   transform::Rigid3d initial_pose = scan_matcher_submap_->local_pose().inverse()*pose_estimate_;
@@ -225,14 +230,26 @@ std::unique_ptr<LocalTrajectoryBuilder::InsertionResult> ContinuousLocalTrajecto
   pose_vec_.push_back(control_point);
   last_control_point_time_ = time;
 //  LOG(INFO)<<"pose_vec size: "<<pose_vec_.size();
-  if (pose_vec_.size() == 5)
+  if (pose_vec_.size() == 4)
   {
     LOG(INFO)<<"create spline";
     sensor::RangeData complete_scan;
     std::vector<PoseAndRangeData>pose_and_range_vec = local_pose_graph_.createSplineFromControlVector(pose_vec_, range_data_vector_, &scan_matcher_submap_->high_resolution_hybrid_grid(), ceres_scan_matcher_);
+    transform::Rigid3d last_pose;
+    common::Time last_time = common::Time::min();
     for (PoseAndRangeData& pose_and_range : pose_and_range_vec) {
       sensor::RangeData range_data = sensor::TransformRangeData(pose_and_range.range_data,
                                                                 scan_matcher_submap_->local_pose().cast<float>()*pose_and_range.pose.cast<float>());
+//      if (last_time > common::Time::min()){
+//        double delta_t = common::ToSeconds(pose_and_range.time - last_time);
+//        velocity_estimate_ +=
+//        (pose_and_range.pose.translation()
+//            - (last_pose).translation()) /
+//            (delta_t);
+//        LOG(INFO)<<"new vel: "<<velocity_estimate_<<"pose: "<<pose_and_range.pose.translation()<<" last pose: "<<(last_pose).translation()<<"delta_t "<<delta_t;
+//      }
+      last_time = pose_and_range.time;
+      last_pose = pose_and_range.pose;
       for (const Eigen::Vector3f& hit : range_data.returns) {
         const Eigen::Vector3f delta = hit - range_data.origin;
         const float range = delta.norm();
@@ -255,15 +272,25 @@ std::unique_ptr<LocalTrajectoryBuilder::InsertionResult> ContinuousLocalTrajecto
     // Querying the active submaps must be done here before calling
     // InsertRangeData() since the queried values are valid for next insertion.
     if (last_scan_match_time_ > common::Time::min() && time > last_scan_match_time_) {
-      const double delta_t = common::ToSeconds(time - last_scan_match_time_);
-      velocity_estimate_ +=
-      ((scan_matcher_submap_->local_pose()*pose_and_range_vec.back().pose).translation() - last_pose.translation()) /
-      delta_t;
+      const double delta_t = common::ToSeconds(time - pose_and_range_vec[pose_and_range_vec.size() - 2].time);
+//      const double delta_t = common::ToSeconds(pose_and_range_vec.back().time
+//              - pose_and_range_vec[pose_and_range_vec.size()-2].time);
+//      velocity_estimate_ =
+//      ((scan_matcher_submap_->local_pose()*pose_and_range_vec.back().pose).translation()
+//          - scan_matcher_submap_->local_pose()* pose_and_range_vec[pose_and_range_vec.size()-2].pose.translation()) /
+//          (delta_t);
+      velocity_estimate_ =
+      ((scan_matcher_submap_->local_pose()*pose_and_range_vec.back().pose).translation()
+          - (scan_matcher_submap_->local_pose()* pose_and_range_vec[pose_and_range_vec.size()-2].pose).translation()) /
+          (delta_t);
       LOG(INFO)<<"new vel: "<<velocity_estimate_;
     }
     last_scan_match_time_ = time;
+    LOG(INFO)<<"old pose:"<<pose_estimate_;
     pose_estimate_ = scan_matcher_submap_->local_pose() * pose_and_range_vec.back().pose;
     LOG(INFO)<<"new pose:"<<pose_estimate_;
+    control_point = {time, scan_matcher_submap_->local_pose().inverse()*pose_estimate_, {}};
+    pose_vec_.push_back(control_point);
     last_pose_estimate_ = {
       time, pose_estimate_,
       sensor::TransformPointCloud(filtered_range_data.returns,

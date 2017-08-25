@@ -65,7 +65,7 @@ TEST(NurbsTest, NurbsTest) {
   boost::multi_array<double, input_dim>& weights_vec = nurb.getWeights().getWeights();
   for (int i = 0; i < weights_vec.size(); i++) {
     LOG(INFO)<<"weight: "<<weights_vec[i];
-    weights_vec[i] = static_cast<double>(i) / static_cast<double>(weights_vec.size());
+    weights_vec[i] = 0.1;
     LOG(INFO)<<"weight: "<<weights_vec[i];
   }
 //  weights.create(weights_vec);

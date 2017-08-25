@@ -135,6 +135,8 @@ void LocalTrajectoryBuilder::Predict(const common::Time time) {
                                           last_orientation.inverse() *
                                           imu_tracker_->orientation();
       pose_estimate_ = transform::Rigid3d(translation, rotation);
+//      vel_est_ += imu_tracker_->linear_acceleration() * delta_t;
+//      LOG(INFO)<<"vel_est: "<<vel_est_;
     }
   }
   else {

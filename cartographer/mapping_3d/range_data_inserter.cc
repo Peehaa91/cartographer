@@ -121,7 +121,7 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
     std::vector<Eigen::Array3i> line;
     Eigen::Array3i hit_cell = hybrid_decay_grid->GetCellIndex(hit);
     hybrid_decay_grid->increaseHitCount(hit_cell);
-    double distance = 0.3;
+    double distance = 0.5;
     hybrid_decay_grid->increaseRayAccumulation(hit_cell, distance);
     //LOG(INFO)<<"hit count: "<<std::get<1>(*(hybrid_grid->mutable_value(hit_cell)));
     Eigen::Array3i direction = origin - hit_cell;
@@ -206,11 +206,21 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
     lines.push_back(line);
   }
   //LOG(INFO)<<"intersct_done";
-  updateProbabilities(lines, hybrid_decay_grid, hybrid_grid );
+  setProbabilities(lines, hybrid_decay_grid, hybrid_grid );
+//  updateProbabilities(lines, hybrid_decay_grid, hybrid_grid );
 //  hybrid_grid->updateWithDecayGrid(*hybrid_decay_grid);
   //LOG(INFO)<<"update prob done";
 }
 
+void RangeDataInserter::setProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const
+{
+  for (const std::vector<Eigen::Array3i>& line : lines){
+    for (const Eigen::Array3i& index : line){
+//     LOG(INFO)<<"index: "<<index<<" prob: "<<hybrid_decay_grid->GetProbabilityFromDecay(index);
+     hybrid_grid->SetProbability(index, hybrid_decay_grid->GetProbability(index));
+    }
+  }
+}
 float SlowValueToProbability(const uint16 value) {
   CHECK_GE(value, 0);
   CHECK_LE(value, 32767);
@@ -270,8 +280,10 @@ void RangeDataInserter::updateProbabilities(const std::vector<std::vector<Eigen:
 //        LOG(ERROR)<<"prob: "<<prob<<" lambda: "<<lambda<<" prob_mult: "<<prob_multiplicator<<" dist: "<<dist;
         prob = 0.9;
       }
-      else if (prob < 0.1)
+      else if (prob < 0.1){
+//        LOG(ERROR)<<"prob: "<<prob<<" lambda: "<<lambda<<" prob_mult: "<<prob_multiplicator<<" dist: "<<dist;
         prob = 0.1;
+      }
       counter++;
       prob_multiplicator *= exp(-lambda * dist);
 //      std::vector<uint16> table(mapping::ComputeLookupTableToApplyOdds(
@@ -281,6 +293,7 @@ void RangeDataInserter::updateProbabilities(const std::vector<std::vector<Eigen:
 //      if (prob < 0.1)
 //        prob = 0.1;
       hybrid_decay_grid->updateProbability(*it, prob, kValueToProbability);
+//      LOG(INFO)<<"prob:"<<hybrid_decay_grid->GetProbability(*it);
 //      hybrid_decay_grid->SetProbability(*it, prob);
 //      LOG(INFO)<<"index: "<<*it<<std::endl<<"prob: "<<hybrid_decay_grid->GetProbability(*it)<<" value: "<<std::get<0>(*values);
       count++;

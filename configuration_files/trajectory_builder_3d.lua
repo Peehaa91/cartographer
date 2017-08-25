@@ -49,8 +49,8 @@ TRAJECTORY_BUILDER_3D = {
     only_optimize_yaw = false,
     ceres_solver_options = {
       use_nonmonotonic_steps = false,
-      max_num_iterations = 12,
-      num_threads = 100,
+      max_num_iterations = 100,
+      num_threads = 8,
     },
   },
 
@@ -60,14 +60,14 @@ TRAJECTORY_BUILDER_3D = {
     max_angle_radians = 0.004,
   },
 
-  imu_gravity_time_constant = 10.,
+  imu_gravity_time_constant = 0.,
   num_odometry_states = 1,
 
   submaps = {
     high_resolution = 0.10,
     high_resolution_max_range = 20.,
     low_resolution = 0.45,
-    num_range_data = 32,
+    num_range_data = 160,
     range_data_inserter = {
       hit_probability = 0.55,
       miss_probability = 0.49,

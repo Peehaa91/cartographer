@@ -51,6 +51,7 @@ class RangeDataInserter {
 
  private:
   void updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
+  void setProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
   const proto::RangeDataInserterOptions options_;
   const std::vector<uint16> hit_table_;
   const std::vector<uint16> miss_table_;

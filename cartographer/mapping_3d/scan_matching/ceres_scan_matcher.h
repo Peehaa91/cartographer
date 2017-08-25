@@ -62,8 +62,16 @@ class CeresScanMatcher {
              const common::Time& begin,
              const common::Time& end,
              const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
-             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>& nurbs,
-             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_estimate,
+             Nurbs<double, 1, 7, KnotType::UNIFORM, WeightType::RATIONAL>& nurbs,
+             Nurbs<double, 1, 7, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_estimate,
+             ceres::Solver::Summary* summary);
+
+  void Match(const HybridGrid* hybrid_grid,
+             const common::Time& begin,
+             const common::Time& end,
+             const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
+             std::vector<transform::Rigid3d>& knot_vector,
+             std::vector<double>& weight_vec,
              ceres::Solver::Summary* summary);
 
  private:

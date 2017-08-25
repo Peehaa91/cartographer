@@ -35,8 +35,8 @@ class CeresPose {
       std::unique_ptr<ceres::LocalParameterization> rotation_parametrization,
       ceres::Problem* problem);
 
-  CeresPose(const CeresPose&) = delete;
-  CeresPose& operator=(const CeresPose&) = delete;
+//  CeresPose(const CeresPose&) = delete;
+//  CeresPose& operator=(const CeresPose&) = delete;
 
   const transform::Rigid3d ToRigid() const;
 

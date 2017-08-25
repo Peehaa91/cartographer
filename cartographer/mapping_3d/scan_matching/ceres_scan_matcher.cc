@@ -29,6 +29,8 @@
 #include "cartographer/mapping_3d/scan_matching/knot_translation_delta_cost_functor.h"
 #include "cartographer/mapping_3d/scan_matching/nurbs_weight_cost_functor.h"
 #include "cartographer/mapping_3d/scan_matching/nurbs_knot_cost_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_knot_auto_cost_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_knot_weights_auto_cost_functor.h"
 #include "cartographer/transform/rigid_transform.h"
 #include "cartographer/transform/transform.h"
 #include "ceres/ceres.h"
@@ -111,7 +113,7 @@ void CeresScanMatcher::Match(const transform::Rigid3d& previous_pose,
     const sensor::PointCloud& point_cloud =
         *point_clouds_and_hybrid_grids[i].first;
     const HybridGrid& hybrid_grid = *point_clouds_and_hybrid_grids[i].second;
-//    LOG(INFO)<<"ceres before: "<<ceres_pose.ToRigid();
+    LOG(INFO)<<"ceres before: "<<ceres_pose.ToRigid();
     problem.AddResidualBlock(
         new ceres::AutoDiffCostFunction<OccupiedSpaceCostFunctor,
                                         ceres::DYNAMIC, 3, 4>(
@@ -136,7 +138,7 @@ void CeresScanMatcher::Match(const transform::Rigid3d& previous_pose,
       nullptr, ceres_pose.rotation());
 
   ceres::Solve(ceres_solver_options_, &problem, summary);
-//  LOG(INFO)<<"ceres after: "<<ceres_pose.ToRigid();
+  LOG(INFO)<<"ceres after: "<<ceres_pose.ToRigid();
   sum += summary->total_time_in_seconds;
   counter++;
   LOG(INFO)<<"mean secs: "<<sum/counter;
@@ -148,15 +150,15 @@ void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
                              const common::Time& begin,
                              const common::Time& end,
                              const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
-                             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>& nurbs,
-                             Nurbs<double, 1, 6, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_estimate,
+                             Nurbs<double, 1, 7, KnotType::UNIFORM, WeightType::RATIONAL>& nurbs,
+                             Nurbs<double, 1, 7, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_estimate,
                              ceres::Solver::Summary* summary)
 {
   ceres::Problem problem;
   int number_of_residuals = 0;
   for (const std::pair<common::Time, sensor::RangeData>& data : range_data_vec)
     number_of_residuals += data.second.returns.size();
-  NurbsWeights<double, 1, 6, WeightType::RATIONAL>& weights = nurbs.getWeights();
+  NurbsWeights<double, 1, 7, WeightType::RATIONAL>& weights = nurbs.getWeights();
   boost::multi_array<double, 1> weights_vec = weights.getWeights();
   std::array<double, 5> initial_weights;
   for (int i = 0; i < weights_vec.size(); i++) {
@@ -176,10 +178,10 @@ void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
 //                  number_of_residuals),
 //          nullptr, initial_weights.data());
   LOG(INFO)<<"add residual";
-  boost::multi_array<std::array<double, 6>, 1>& points = nurbs.getPoints();
+  boost::multi_array<std::array<double, 7>, 1>& points = nurbs.getPoints();
   problem.AddResidualBlock(
           new ceres:: NumericDiffCostFunction<NurbsKnotCostFunctor,
-          ceres::FORWARD,ceres::DYNAMIC, 6, 6, 6, 6, 6>(
+          ceres::FORWARD,ceres::DYNAMIC, 7, 7, 7, 7, 7>(
               new NurbsKnotCostFunctor(
                   options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
                   hybrid_grid_copy,
@@ -189,40 +191,181 @@ void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
                   &nurbs), ceres::TAKE_OWNERSHIP,
                   number_of_residuals),
           nullptr, points[0].data(), points[1].data(), points[2].data(), points[3].data(), points[4].data());
-  for (int i = 0; i < 5; i++)
-  {
-    problem.AddResidualBlock(
-        new ceres::AutoDiffCostFunction<KnotTranslationDeltaCostFunctor, 3, 6>(
-            new KnotTranslationDeltaCostFunctor(options_.translation_weight(),
-                                            points[i])),
-        nullptr, points[i].data());
-  }
+//  for (int i = 0; i < 5; i++)
+//  {
+//    problem.AddResidualBlock(
+//        new ceres::AutoDiffCostFunction<KnotTranslationDeltaCostFunctor, 3, 6>(
+//            new KnotTranslationDeltaCostFunctor(options_.translation_weight(),
+//                                            points[i])),
+//        nullptr, points[i].data());
+//  }
+//  std::vector<CeresPose> knot_vec;
+//  for (int i = 0; i < 5; i++){
+//    transform::Rigid3d initial_pose = transform::Rigid3d(Eigen::Vector3d(points[i][0], points[i][1], points[i][2]),
+//                                                         Eigen::Quaterniond(points[i][6], points[i][3], points[i][4], points[i][5]));
+////    CeresPose ceres_pose = CeresPose(
+////        initial_pose, nullptr /* translation_parameterization */,
+////        options_.only_optimize_yaw()
+////            ? std::unique_ptr<ceres::LocalParameterization>(
+////                  common::make_unique<ceres::AutoDiffLocalParameterization<
+////                      YawOnlyQuaternionPlus, 4, 1>>())
+////            : std::unique_ptr<ceres::LocalParameterization>(
+////                  common::make_unique<ceres::QuaternionParameterization>()),
+////        &problem);
+//    knot_vec.push_back(CeresPose(
+//        initial_pose, nullptr /* translation_parameterization */,
+//        options_.only_optimize_yaw()
+//            ? std::unique_ptr<ceres::LocalParameterization>(
+//                  common::make_unique<ceres::AutoDiffLocalParameterization<
+//                      YawOnlyQuaternionPlus, 4, 1>>())
+//            : std::unique_ptr<ceres::LocalParameterization>(
+//                  common::make_unique<ceres::QuaternionParameterization>()),
+//        &problem));
+//  }
 //  problem.AddResidualBlock(
-//          new ceres:: AutoDiffCostFunction<NurbsWeightCostFunctor,
-//          ceres::DYNAMIC, 5>(
-//              new NurbsWeightCostFunctor(
+//          new ceres:: AutoDiffCostFunction<NurbsKnotAutoCostFunctor,
+//          ceres::DYNAMIC, 3,4,3,4,3,4,3,4>(
+//              new NurbsKnotAutoCostFunctor(
 //                  options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
 //                  hybrid_grid_copy,
 //                  begin,
 //                  end,
 //                  range_data_vec,
-//                  nurbs),
+//                  &nurbs),
 //                  number_of_residuals),
-//          nullptr, initial_weights.data());
-//  for (int i = 0; i < weights_vec.size(); i++) {
-//    problem.SetParameterLowerBound(initial_weights.data(), i, 0);
-//    problem.SetParameterUpperBound(initial_weights.data(), i, 1);
+//          nullptr, knot_vec[0].translation(), knot_vec[0].rotation()
+//          , knot_vec[1].translation(), knot_vec[1].rotation()
+//          , knot_vec[2].translation(), knot_vec[2].rotation()
+//          , knot_vec[3].translation(), knot_vec[3].rotation());
+
+  std::vector<int> const_para = {4, 5};
+  for (int i = 0; i < 5; i++) {
+    problem.SetParameterLowerBound(points[i].data(), 3, -1);
+    problem.SetParameterUpperBound(points[i].data(), 3, 1);
+//    std::unique_ptr<ceres::LocalParameterization> subset_para =  common::make_unique<ceres::SubsetParameterization>(7, const_para);
+//    problem.SetParameterization(points[i].data(),subset_para.release());
+    for (int j = 4; j < 7; j++)
+    {
+      problem.SetParameterLowerBound(points[i].data(), j, -1);
+      problem.SetParameterUpperBound(points[i].data(), j, 1);
+    }
+  }
 
 //  }
   std::unique_ptr<ceres::LocalParameterization> parametrization = common::make_unique<ceres:: HomogeneousVectorParameterization>(5);
 //  problem.SetParameterization(initial_weights.data(),parametrization.release());
   LOG(INFO)<<"number of threads:"<<ceres_solver_options_.num_threads;
+  LOG(INFO)<<"before";
+   for (int i = 0; i < points.size(); i++) {
+     Eigen::Quaterniond quat(points[i][6], points[i][3], points[i][4], points[i][5]);
+     Eigen::Matrix3d rot_mat = Eigen::Matrix3d(quat);
+     Eigen::Vector3d angles = rot_mat.eulerAngles(0, 1, 2);
+     LOG(INFO)<<"x: "<<points[i][0]<<" y: "<<points[i][1]<<"z: "<<points[i][2]<<" roll: "<<angles(0)<<" pitch: "<<angles(1)<<" yaw: "<<angles(2);
+     }
   ceres::Solve(ceres_solver_options_, &problem, summary);
   LOG(INFO)<<summary->FullReport();
   boost::multi_array<double, 1>& weights_estimate = nurbs_estimate->getWeights().getWeights();
-  for (int i = 0; i < initial_weights.size(); i++) {
-    weights_estimate[i] = initial_weights[i];
+  LOG(INFO)<<"after";
+  for (int i = 0; i < points.size(); i++) {
+    Eigen::Quaterniond quat(points[i][6], points[i][3], points[i][4], points[i][5]);
+    Eigen::Matrix3d rot_mat = Eigen::Matrix3d(quat);
+    Eigen::Vector3d angles = rot_mat.eulerAngles(0, 1, 2);
+    LOG(INFO)<<"x: "<<points[i][0]<<" y: "<<points[i][1]<<"z: "<<points[i][2]<<" roll: "<<angles(0)<<" pitch: "<<angles(1)<<" yaw: "<<angles(2);
     }
+
+}
+
+void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
+                             const common::Time& begin,
+                             const common::Time& end,
+                             const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
+                             std::vector<transform::Rigid3d>& knot_vector,
+                             std::vector<double>& weight_vec,
+                             ceres::Solver::Summary* summary)
+{
+  ceres::Problem problem;
+  int number_of_residuals = 0;
+  for (const std::pair<common::Time, sensor::RangeData>& data : range_data_vec)
+    number_of_residuals += data.second.returns.size();
+  std::vector<CeresPose> knot_vec;
+  for (int i = 0; i < 4; i++){
+//    CeresPose ceres_pose = CeresPose(
+//        initial_pose, nullptr /* translation_parameterization */,
+//        options_.only_optimize_yaw()
+//            ? std::unique_ptr<ceres::LocalParameterization>(
+//                  common::make_unique<ceres::AutoDiffLocalParameterization<
+//                      YawOnlyQuaternionPlus, 4, 1>>())
+//            : std::unique_ptr<ceres::LocalParameterization>(
+//                  common::make_unique<ceres::QuaternionParameterization>()),
+//        &problem);
+    if (options_.only_optimize_yaw())
+    {
+      knot_vec.push_back(CeresPose(
+          knot_vector[i], nullptr /* translation_parameterization */,
+          nullptr,
+          &problem));
+      LOG(INFO)<<"knot "<<i<<" before: "<<knot_vec[i].ToRigid();
+    }
+    else
+    {
+      knot_vec.push_back(CeresPose(
+          knot_vector[i], nullptr /* translation_parameterization */,
+          nullptr,
+          &problem));
+    }
+    std::unique_ptr<ceres::LocalParameterization> para(
+                    common::make_unique<ceres::AutoDiffLocalParameterization<
+                    YawOnlyQuaternionPlus, 4, 1>>());
+    problem.AddParameterBlock(knot_vec[i].rotation(),4,para.release());
+  }
+
+  problem.AddResidualBlock(
+          new ceres:: AutoDiffCostFunction<NurbsKnotAutoCostFunctor,
+          ceres::DYNAMIC, 3,4,3,4,3,4,3,4>(
+              new NurbsKnotAutoCostFunctor(
+                  options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
+                  *hybrid_grid,
+                  begin,
+                  end,
+                  range_data_vec),
+                  number_of_residuals),
+          nullptr, knot_vec[0].translation(), knot_vec[0].rotation()
+          , knot_vec[1].translation(), knot_vec[1].rotation()
+          , knot_vec[2].translation(), knot_vec[2].rotation()
+          , knot_vec[3].translation(), knot_vec[3].rotation());
+//  problem.AddResidualBlock(
+//          new ceres:: AutoDiffCostFunction<NurbsKnotWeightstAutoCostFunctor,
+//          ceres::DYNAMIC, 3,4,3,4,3,4,3,4,4>(
+//              new NurbsKnotWeightstAutoCostFunctor(
+//                  options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
+//                  *hybrid_grid,
+//                  begin,
+//                  end,
+//                  range_data_vec),
+//                  number_of_residuals),
+//          nullptr, knot_vec[0].translation(), knot_vec[0].rotation()
+//          , knot_vec[1].translation(), knot_vec[1].rotation()
+//          , knot_vec[2].translation(), knot_vec[2].rotation()
+//          , knot_vec[3].translation(), knot_vec[3].rotation()
+//          , weight_vec.data());
+//  std::vector<int> const_para = {0, 3};
+//  std::unique_ptr<ceres::LocalParameterization> subset_para =  common::make_unique<ceres::SubsetParameterization>(4, const_para);
+//  problem.SetParameterization(weight_vec.data(),subset_para.release());
+//  problem.SetParameterLowerBound(weight_vec.data(), 1, 0);
+//  problem.SetParameterUpperBound(weight_vec.data(), 1, 1);
+//  problem.SetParameterLowerBound(weight_vec.data(), 2, 0);
+//  problem.SetParameterUpperBound(weight_vec.data(), 2, 1);
+//  for (int i = 0; i < knot_vec.size(); i++){
+//    std::unique_ptr<ceres::LocalParameterization> parametrization = common::make_unique<ceres::AutoDiffLocalParameterization<
+//        YawOnlyQuaternionPlus, 4, 1>>();
+//    problem.SetParameterization(knot_vec[0].rotation(), parametrization.release());
+//  }
+  ceres::Solve(ceres_solver_options_, &problem, summary);
+  LOG(INFO)<<summary->FullReport();
+  for (int i = 0; i < knot_vec.size(); i++){
+    LOG(INFO)<<"knot "<<i<<" after: "<<knot_vec[i].ToRigid();
+    knot_vector[i] = knot_vec[i].ToRigid();
+  }
 
 }
 
