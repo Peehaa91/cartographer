@@ -19,9 +19,9 @@ namespace mapping_3d {
 
 const int input_dim = 1;
 const int output_dim = 7;
-const int degree = 2;
+const int degree = 3;
 const KnotType knot_type = KnotType::UNIFORM;
-const WeightType weight_type = WeightType::RATIONAL;
+const WeightType weight_type = WeightType::NON_RATIONAL;
 
 proto::LocalPoseGraphOptions CreateLocalPoseGraphOptions(
     common::LuaParameterDictionary* parameter_dictionary);
@@ -44,15 +44,22 @@ class LocalPoseGraph {
   std::vector<PoseAndRangeData> createSplineFromControlVector(
       std::vector<PoseEstimate>& pose_vec,
       std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
+      std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_angular_vel_data_vector,
+      std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
       const HybridGrid* hybrid_grid,
-      const std::unique_ptr<scan_matching::CeresScanMatcher>& ceres_scan_matcher);
+      const std::unique_ptr<scan_matching::CeresScanMatcher>& ceres_scan_matcher,
+      const HybridDecayGrid* decay_grid);
   int nurbs_number = 0;
 
  private:
 
   const proto::LocalPoseGraphOptions options_;
-  void writeSplineInFile(std::vector<PoseEstimate>& pose_vec,
-                         std::vector<PoseAndRangeData> & range_data_vec);
+  void createPoseAndScanFromSpline(std::vector<PoseEstimate>& control_point_vec,
+                                 std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
+                                 std::vector<PoseAndRangeData>& pose_and_cloud_vec);
+  void writeSplineInFile(std::vector<PoseEstimate>& control_point_vec,
+                         std::vector<PoseAndRangeData> & range_data_vec,
+                         std::string file_name);
   /*B Spline Parameters*/
   unsigned int input_size_;
   unsigned int output_size_;

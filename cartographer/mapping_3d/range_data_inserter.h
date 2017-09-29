@@ -23,6 +23,7 @@
 #include "cartographer/mapping_3d/proto/range_data_inserter_options.pb.h"
 #include "cartographer/sensor/point_cloud.h"
 #include "cartographer/sensor/range_data.h"
+#include "cartographer/mapping_3d/ray_tracer.h"
 
 namespace cartographer {
 namespace mapping_3d {
@@ -50,11 +51,25 @@ class RangeDataInserter {
 		  	  HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
 
  private:
-  void updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
-  void setProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines, HybridDecayGrid* hybrid_decay_grid, HybridGrid* hybrid_grid) const;
+  void updateProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines,
+                           HybridDecayGrid* hybrid_decay_grid,
+                           HybridGrid* hybrid_grid) const;
+
+  void setProbabilities(const std::vector<std::vector<Eigen::Array3i>>& lines,
+                        HybridDecayGrid* hybrid_decay_grid,
+                        HybridGrid* hybrid_grid) const;
+
+  double calculateRayLengthInVoxel(Eigen::Vector3f& slope,
+                                   Eigen::Array3i& origin,
+                                   Eigen::Array3i& cell) const;
+
+  bool checkInsideVoxel(Eigen::Vector3f& cell, Eigen::Vector3f& point) const;
+
+  double DistanceToRay(Eigen::Vector3f slope, Eigen::Vector3f& cell, Eigen::Vector3f& origin) const;
   const proto::RangeDataInserterOptions options_;
   const std::vector<uint16> hit_table_;
   const std::vector<uint16> miss_table_;
+  RayTracer ray_tracer_;
 };
 
 }  // namespace mapping_3d

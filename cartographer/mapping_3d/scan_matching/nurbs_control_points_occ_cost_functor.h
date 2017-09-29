@@ -5,8 +5,8 @@
  *      Author: schnattinger
  */
 
-#ifndef CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_KNOT_COST_FUNCTOR_H_
-#define CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_KNOT_COST_FUNCTOR_H_
+#ifndef CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_CONTROL_POINTS_OCC_COST_FUNCTOR_H_
+#define CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_CONTROL_POINTS_OCC_COST_FUNCTOR_H_
 
 #include "Eigen/Core"
 #include "cartographer/mapping_3d/hybrid_grid.h"
@@ -23,11 +23,11 @@ namespace scan_matching {
 // Computes the cost of inserting occupied space described by the point cloud
 // into the map. The cost increases with the amount of free space that would be
 // replaced by occupied space.
-class NurbsKnotCostFunctor {
+class NurbsControlPointOccSpaceCostFunctor {
  public:
   // Creates an OccupiedSpaceCostFunctor using the specified grid, 'rotation' to
   // add to all poses, and point cloud.
-  NurbsKnotCostFunctor(
+  NurbsControlPointOccSpaceCostFunctor(
       const double scaling_factor,
       const HybridGrid& hybrid_grid,
       const common::Time& begin,
@@ -42,8 +42,8 @@ class NurbsKnotCostFunctor {
         nurbs_(nurbs) {
   }
 
-  NurbsKnotCostFunctor(const NurbsKnotCostFunctor&) = delete;
-  NurbsKnotCostFunctor& operator=(const NurbsKnotCostFunctor&) = delete;
+  NurbsControlPointOccSpaceCostFunctor(const NurbsControlPointOccSpaceCostFunctor&) = delete;
+  NurbsControlPointOccSpaceCostFunctor& operator=(const NurbsControlPointOccSpaceCostFunctor&) = delete;
 
   bool operator()(const double* const point_1, const double* const point_2,
                   const double* const point_3, const double* const point_4,
@@ -119,4 +119,4 @@ private:
 }
 }
 
-#endif /* CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_KNOT_COST_FUNCTOR_H_ */
+#endif /* CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_CONTROL_POINTS_OCC_COST_FUNCTOR_H_ */

@@ -88,6 +88,10 @@ class SubmapDecay : public mapping_3d::Submap {
 
   const HybridGrid& low_resolution_hybrid_grid() const override;
 
+  const HybridDecayGrid& high_resolution_hybrid_decay_grid() const;
+
+  const HybridDecayGrid& low_resolution_hybrid_decay_grid() const;
+
   bool finished() const {
     return finished_;
   }

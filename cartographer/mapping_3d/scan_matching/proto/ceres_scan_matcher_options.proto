@@ -27,8 +27,11 @@ message CeresScanMatcherOptions {
 
   // Whether only to allow changes to yaw, keeping roll/pitch constant.
   optional bool only_optimize_yaw = 5;
+  
 
   // Configure the Ceres solver. See the Ceres documentation for more
   // information: https://code.google.com/p/ceres-solver/
   optional common.proto.CeresSolverOptions ceres_solver_options = 6;
+    //Ray Tracer Length for Free Spcae Estimation
+  optional int32 ray_tracer_line_size = 7;
 }

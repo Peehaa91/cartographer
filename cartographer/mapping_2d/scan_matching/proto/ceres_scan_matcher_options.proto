@@ -28,4 +28,6 @@ message CeresScanMatcherOptions {
   // Configure the Ceres solver. See the Ceres documentation for more
   // information: https://code.google.com/p/ceres-solver/
   optional common.proto.CeresSolverOptions ceres_solver_options = 9;
+  
+    optional int32 ray_tracer_line_size = 10;
 }

@@ -1,4 +1,6 @@
 #include <cartographer/mapping_3d/continuous_local_trajectory_builder.h>
+#include "cartographer/mapping_3d/scan_matching/proto/ceres_scan_matcher_options.pb.h"
+
 
 namespace cartographer {
 namespace mapping_3d {
@@ -31,6 +33,10 @@ void ContinuousLocalTrajectoryBuilder::AddImuData(
   Predict(time);
   imu_tracker_->AddImuLinearAccelerationObservation(linear_acceleration);
   imu_tracker_->AddImuAngularVelocityObservation(angular_velocity);
+  if (range_data_vector_.size() > 0){
+    imu_angular_vel_data_vector_.push_back(std::make_pair(time, angular_velocity));
+    linear_acc_data_vector_.push_back(std::make_pair(time, linear_acceleration));
+  }
   if (initial_imu_) {
     LOG(INFO)<<"initial imu";
 //    last_update_time_ = time;
@@ -86,8 +92,9 @@ void ContinuousLocalTrajectoryBuilder::Predict(common::Time time) {
     const Eigen::Quaterniond rotation = pose_estimate_.rotation()
         * last_orientation.inverse() * imu_tracker_->orientation();
     transform::Rigid3d pose = transform::Rigid3d(translation, rotation);
-//    acceleration_estimate_ = imu_tracker_->linear_acceleration();
+    acceleration_estimate_ = imu_tracker_->linear_acceleration();
 //    velocity_estimate_ += acceleration_estimate_ * delta_t;
+//    velocity_estimate_ = rotation.inverse() * velocity_estimate_;
 //      last_pose_estimate_ = PoseEstimate(time, pose,  {});
     pose_estimate_ = pose;
 //    vel_est_ += imu_tracker_->linear_acceleration() * delta_t;
@@ -177,64 +184,25 @@ std::unique_ptr<LocalTrajectoryBuilder::InsertionResult> ContinuousLocalTrajecto
   scan_matcher_submap_ =
   active_submaps_.submaps().front();
   transform::Rigid3d initial_pose = scan_matcher_submap_->local_pose().inverse()*pose_estimate_;
-//  sensor::AdaptiveVoxelFilter adaptive_voxel_filter(
-//      options_.high_resolution_adaptive_voxel_filter_options());
-//  const sensor::PointCloud filtered_point_cloud_in_tracking =
-//  adaptive_voxel_filter.Filter(filtered_range_data.returns);
-//  scan_matcher_submap_ = active_submaps_.submaps().front();
-//  transform::Rigid3d matched_pose = scan_matcher_submap_->local_pose().inverse() * pose_estimate_;
-//  real_time_correlative_scan_matcher_->Match(
-//          initial_pose, filtered_point_cloud_in_tracking,
-//          matching_submap->high_resolution_hybrid_grid(), &matched_pose);
-
-//  sensor::AdaptiveVoxelFilter low_resolution_adaptive_voxel_filter(
-//      options_.low_resolution_adaptive_voxel_filter_options());
-//  const sensor::PointCloud low_resolution_point_cloud_in_tracking =
-//  low_resolution_adaptive_voxel_filter.Filter(filtered_range_data.returns);
-
   transform::Rigid3d last_pose = pose_estimate_;
-//  transform::Rigid3d pose_observation_in_submap;
-//  ceres::Solver::Summary summary;
-//  ceres_scan_matcher_->Match(
-//      scan_matcher_submap_->local_pose().inverse() * pose_estimate_,
-//      matched_pose,
-//      {{&filtered_point_cloud_in_tracking,
-//        &scan_matcher_submap_->high_resolution_hybrid_grid()},
-//          {&low_resolution_point_cloud_in_tracking,
-//        &scan_matcher_submap_->low_resolution_hybrid_grid()}},
-//      &pose_observation_in_submap, &summary);
-//  real_time_correlative_scan_matcher_->Match(
-//      scan_matcher_submap_->local_pose().inverse() * pose_estimate_, filtered_point_cloud_in_tracking,
-//      scan_matcher_submap_->high_resolution_hybrid_grid(), &pose_observation_in_submap);
-//  pose_estimate_ = scan_matcher_submap_->local_pose() * pose_observation_in_submap;
-
-//  if (last_scan_match_time_ > common::Time::min() &&
-//      time > last_scan_match_time_) {
-//    const double delta_t = common::ToSeconds(time - last_scan_match_time_);
-//    // This adds the observed difference in velocity that would have reduced the
-//    // error to zero.
-////      LOG(INFO)<<"update vel";
-//    velocity_estimate_ +=
-//    (pose_estimate_.translation() - last_pose.translation()) /
-//    delta_t;
-//  }
-//  last_scan_match_time_ = time;
-//  LOG(INFO)<<"matched pose: "<<matched_pose;
-//  last_pose_estimate_ = {
-//    time, pose_estimate_,
-//    sensor::TransformPointCloud(filtered_range_data.returns,
-//        pose_estimate_.cast<float>())};
 
   //insert control points
   PoseEstimate control_point = {time, scan_matcher_submap_->local_pose().inverse()*pose_estimate_, {}};
   pose_vec_.push_back(control_point);
   last_control_point_time_ = time;
-//  LOG(INFO)<<"pose_vec size: "<<pose_vec_.size();
-  if (pose_vec_.size() == 4)
+  const HybridDecayGrid* decay_grid = &scan_matcher_submap_->high_resolution_hybrid_decay_grid();
+
+  if (pose_vec_.size() == 5)
   {
     LOG(INFO)<<"create spline";
     sensor::RangeData complete_scan;
-    std::vector<PoseAndRangeData>pose_and_range_vec = local_pose_graph_.createSplineFromControlVector(pose_vec_, range_data_vector_, &scan_matcher_submap_->high_resolution_hybrid_grid(), ceres_scan_matcher_);
+    std::vector<PoseAndRangeData>pose_and_range_vec = local_pose_graph_.createSplineFromControlVector(pose_vec_,
+                                                                                                      range_data_vector_,
+                                                                                                      imu_angular_vel_data_vector_,
+                                                                                                      linear_acc_data_vector_,
+                                                                                                      &scan_matcher_submap_->high_resolution_hybrid_grid(),
+                                                                                                      ceres_scan_matcher_,
+                                                                                                      decay_grid);
     transform::Rigid3d last_pose;
     common::Time last_time = common::Time::min();
     for (PoseAndRangeData& pose_and_range : pose_and_range_vec) {
@@ -269,6 +237,8 @@ std::unique_ptr<LocalTrajectoryBuilder::InsertionResult> ContinuousLocalTrajecto
     }
     pose_vec_.clear();
     range_data_vector_.clear();
+    imu_angular_vel_data_vector_.clear();
+    linear_acc_data_vector_.clear();
     // Querying the active submaps must be done here before calling
     // InsertRangeData() since the queried values are valid for next insertion.
     if (last_scan_match_time_ > common::Time::min() && time > last_scan_match_time_) {
@@ -279,11 +249,13 @@ std::unique_ptr<LocalTrajectoryBuilder::InsertionResult> ContinuousLocalTrajecto
 //      ((scan_matcher_submap_->local_pose()*pose_and_range_vec.back().pose).translation()
 //          - scan_matcher_submap_->local_pose()* pose_and_range_vec[pose_and_range_vec.size()-2].pose.translation()) /
 //          (delta_t);
-      velocity_estimate_ =
-      ((scan_matcher_submap_->local_pose()*pose_and_range_vec.back().pose).translation()
-          - (scan_matcher_submap_->local_pose()* pose_and_range_vec[pose_and_range_vec.size()-2].pose).translation()) /
-          (delta_t);
+//      LOG(INFO)<<"vel before: "<<velocity_estimate_;
+//      velocity_estimate_ =
+//      ((scan_matcher_submap_->local_pose()*pose_and_range_vec.back().pose).translation()
+//          - (scan_matcher_submap_->local_pose()* pose_and_range_vec[pose_and_range_vec.size()-2].pose).translation()) /
+//          (delta_t);
       LOG(INFO)<<"new vel: "<<velocity_estimate_;
+//      velocity_estimate_ = Eigen::Vector3d::Zero();
     }
     last_scan_match_time_ = time;
     LOG(INFO)<<"old pose:"<<pose_estimate_;

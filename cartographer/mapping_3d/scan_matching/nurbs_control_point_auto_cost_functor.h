@@ -5,8 +5,8 @@
  *      Author: schnattinger
  */
 
-#ifndef CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_KNOT_AUTO_COST_FUNCTOR_H_
-#define CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_KNOT_AUTO_COST_FUNCTOR_H_
+#ifndef CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_CONTROL_POINT_AUTO_COST_FUNCTOR_H_
+#define CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_CONTROL_POINT_AUTO_COST_FUNCTOR_H_
 
 #include "Eigen/Core"
 #include "cartographer/mapping_3d/hybrid_grid.h"
@@ -15,49 +15,56 @@
 #include "cartographer/transform/rigid_transform.h"
 #include "cartographer/transform/transform.h"
 #include "cartographer/mapping_3d/scan_matching/nurbs.h"
+#include <cmath>
+#include <ceres/jet.h>
 
 namespace cartographer {
 namespace mapping_3d {
 namespace scan_matching {
+
 const int input_dim = 1;
 const int output_dim = 7;
-const int degree = 2;
+const int degree = 3;
 const KnotType knot_type = KnotType::UNIFORM;
-const WeightType weight_type = WeightType::RATIONAL;
+const WeightType weight_type = WeightType::NON_RATIONAL;
 // Computes the cost of inserting occupied space described by the point cloud
 // into the map. The cost increases with the amount of free space that would be
 // replaced by occupied space.
-class NurbsKnotAutoCostFunctor {
+class NurbsControlPointCostFunctor {
  public:
   // Creates an OccupiedSpaceCostFunctor using the specified grid, 'rotation' to
   // add to all poses, and point cloud.
-  NurbsKnotAutoCostFunctor(
+  NurbsControlPointCostFunctor(
       const double scaling_factor,
       const HybridGrid& hybrid_grid,
       const common::Time& begin,
       const common::Time& end,
-      const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec)
+      const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec,
+      const  std::shared_ptr<RayTracer>& ray_tracer)
       : scaling_factor_(scaling_factor),
         range_data_vec_(range_data_vec),
         interpolated_grid_(hybrid_grid),
+        hybrid_grid_(&hybrid_grid),
         begin_(begin),
-        end_(end) {
+        end_(end){
+    ray_tracer_= std::make_shared<RayTracer>(*ray_tracer);
   }
 
-  NurbsKnotAutoCostFunctor(const NurbsKnotCostFunctor&) = delete;
-  NurbsKnotAutoCostFunctor& operator=(const NurbsKnotCostFunctor&) = delete;
+  NurbsControlPointCostFunctor(const NurbsControlPointCostFunctor&) = delete;
+  NurbsControlPointCostFunctor& operator=(const NurbsControlPointCostFunctor&) = delete;
 
   template <typename T>
   bool operator()(const T* const point_1_trans, const T* const point_1_rotation,
                   const T* const point_2_trans, const T* const point_2_rotation,
                   const T* const point_3_trans, const T* const point_3_rotation,
                   const T* const point_4_trans, const T* const point_4_rotation,
+                  const T* const point_5_trans, const T* const point_5_rotation,
                   T* const residual) const {
 
     std::vector<const T*> vec_trans = {point_1_trans, point_2_trans,
-        point_3_trans, point_4_trans};
+        point_3_trans, point_4_trans, point_5_trans};
     std::vector<const T*> vec_rot = {point_1_rotation, point_2_rotation,
-        point_3_rotation, point_4_rotation};
+        point_3_rotation, point_4_rotation, point_5_rotation};
     Nurbs<T, input_dim, output_dim, knot_type, weight_type> nurbs = Nurbs<
           T, input_dim, output_dim, knot_type, weight_type>();
       NurbsKnots<T, input_dim, output_dim, knot_type> knots = NurbsKnots<
@@ -99,7 +106,7 @@ class NurbsKnotAutoCostFunctor {
         const T probability =
                     interpolated_grid_.GetProbability(world[0], world[1], world[2]);
                 residual[counter] = scaling_factor_ * (1. - probability);
-                counter++;
+        counter++;
       }
     }
 //    int number_of_residuals = 0;
@@ -109,12 +116,16 @@ class NurbsKnotAutoCostFunctor {
 //      residual[i] = T(0);
     return true;
   }
+
+
 private:
   const double scaling_factor_;
   const InterpolatedGrid interpolated_grid_;
+  const HybridGrid* hybrid_grid_;
   const common::Time begin_;
   const common::Time end_;
   const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec_;
+  std::shared_ptr<RayTracer> ray_tracer_;
 };
 
 
@@ -125,4 +136,4 @@ private:
 
 
 
-#endif /* CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_KNOT_AUTO_COST_FUNCTOR_H_ */
+#endif /* CARTOGRAPHER_MAPPING_3D_SCAN_MATCHING_NURBS_CONTROL_POINT_AUTO_COST_FUNCTOR_H_ */

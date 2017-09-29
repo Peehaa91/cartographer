@@ -101,7 +101,7 @@ class InterpolatedGrid {
     return (q1 - q2) * normalized_xxx * 2. + (q2 - q1) * normalized_xx * 3. +
            q1;
   }
-
+  const HybridGrid& hybrid_grid_;
  private:
   template <typename T>
   void ComputeInterpolationDataPoints(const T& x, const T& y, const T& z,
@@ -145,7 +145,7 @@ class InterpolatedGrid {
     return CenterOfLowerVoxel(jet_x.a, jet_y.a, jet_z.a);
   }
 
-  const HybridGrid& hybrid_grid_;
+
 };
 
 }  // namespace scan_matching

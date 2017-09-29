@@ -28,13 +28,18 @@
 #include "cartographer/mapping_3d/scan_matching/translation_delta_cost_functor.h"
 #include "cartographer/mapping_3d/scan_matching/knot_translation_delta_cost_functor.h"
 #include "cartographer/mapping_3d/scan_matching/nurbs_weight_cost_functor.h"
-#include "cartographer/mapping_3d/scan_matching/nurbs_knot_cost_functor.h"
-#include "cartographer/mapping_3d/scan_matching/nurbs_knot_auto_cost_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_control_points_occ_cost_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_control_point_auto_cost_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_control_point_dynamic_auto_cost_functor.h"
 #include "cartographer/mapping_3d/scan_matching/nurbs_knot_weights_auto_cost_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_rotation_vel_delta_functor.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_translation_acceleration_delta_functor.h"
 #include "cartographer/transform/rigid_transform.h"
 #include "cartographer/transform/transform.h"
 #include "ceres/ceres.h"
 #include "glog/logging.h"
+#include "cartographer/mapping_3d/ray_tracer.h"
+#include "cartographer/mapping_3d/scan_matching/nurbs_control_points_free_space_cost_functor.h"
 
 namespace cartographer {
 namespace mapping_3d {
@@ -74,6 +79,9 @@ proto::CeresScanMatcherOptions CreateCeresScanMatcherOptions(
       parameter_dictionary->GetDouble("rotation_weight"));
   options.set_only_optimize_yaw(
       parameter_dictionary->GetBool("only_optimize_yaw"));
+  LOG(INFO)<<"has ray tracer: "<<options.has_ray_tracer_line_size();
+  options.set_ray_tracer_line_size(
+      parameter_dictionary->GetInt("ray_tracer_line_size"));
   *options.mutable_ceres_solver_options() =
       common::CreateCeresSolverOptionsProto(
           parameter_dictionary->GetDictionary("ceres_solver_options").get());
@@ -87,6 +95,7 @@ CeresScanMatcher::CeresScanMatcher(
           common::CreateCeresSolverOptions(options.ceres_solver_options())) {
   ceres_solver_options_.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
   ceres_solver_options_.num_linear_solver_threads = options_.ceres_solver_options().num_threads();
+  ray_tracer_ = std::make_shared<RayTracer>(RayTracer(options.ray_tracer_line_size()));
 }
 int counter = 0;
 double sum = 0.0;
@@ -180,9 +189,9 @@ void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
   LOG(INFO)<<"add residual";
   boost::multi_array<std::array<double, 7>, 1>& points = nurbs.getPoints();
   problem.AddResidualBlock(
-          new ceres:: NumericDiffCostFunction<NurbsKnotCostFunctor,
+          new ceres:: NumericDiffCostFunction<NurbsControlPointOccSpaceCostFunctor,
           ceres::FORWARD,ceres::DYNAMIC, 7, 7, 7, 7, 7>(
-              new NurbsKnotCostFunctor(
+              new NurbsControlPointOccSpaceCostFunctor(
                   options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
                   hybrid_grid_copy,
                   begin,
@@ -276,10 +285,13 @@ void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
 }
 
 void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
+                             const HybridDecayGrid* decay_grid,
                              const common::Time& begin,
                              const common::Time& end,
                              const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
-                             std::vector<transform::Rigid3d>& knot_vector,
+                             std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_angular_vel_data_vector,
+                             std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
+                             std::vector<transform::Rigid3d>& control_points,
                              std::vector<double>& weight_vec,
                              ceres::Solver::Summary* summary)
 {
@@ -287,8 +299,8 @@ void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
   int number_of_residuals = 0;
   for (const std::pair<common::Time, sensor::RangeData>& data : range_data_vec)
     number_of_residuals += data.second.returns.size();
-  std::vector<CeresPose> knot_vec;
-  for (int i = 0; i < 4; i++){
+  std::vector<CeresPose> ceres_pose_control_points;
+  for (int i = 0; i < control_points.size(); i++){
 //    CeresPose ceres_pose = CeresPose(
 //        initial_pose, nullptr /* translation_parameterization */,
 //        options_.only_optimize_yaw()
@@ -300,72 +312,174 @@ void CeresScanMatcher::Match(const HybridGrid* hybrid_grid,
 //        &problem);
     if (options_.only_optimize_yaw())
     {
-      knot_vec.push_back(CeresPose(
-          knot_vector[i], nullptr /* translation_parameterization */,
+      ceres_pose_control_points.push_back(CeresPose(
+          control_points[i], nullptr /* translation_parameterization */,
           nullptr,
           &problem));
-      LOG(INFO)<<"knot "<<i<<" before: "<<knot_vec[i].ToRigid();
+      LOG(INFO)<<"knot "<<i<<" before: "<<ceres_pose_control_points[i].ToRigid();
     }
     else
     {
-      knot_vec.push_back(CeresPose(
-          knot_vector[i], nullptr /* translation_parameterization */,
+      ceres_pose_control_points.push_back(CeresPose(
+          control_points[i], nullptr /* translation_parameterization */,
           nullptr,
           &problem));
     }
     std::unique_ptr<ceres::LocalParameterization> para(
                     common::make_unique<ceres::AutoDiffLocalParameterization<
                     YawOnlyQuaternionPlus, 4, 1>>());
-    problem.AddParameterBlock(knot_vec[i].rotation(),4,para.release());
+    problem.AddParameterBlock(ceres_pose_control_points[i].rotation(),4,para.release());
   }
 
-  problem.AddResidualBlock(
-          new ceres:: AutoDiffCostFunction<NurbsKnotAutoCostFunctor,
-          ceres::DYNAMIC, 3,4,3,4,3,4,3,4>(
-              new NurbsKnotAutoCostFunctor(
-                  options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
-                  *hybrid_grid,
-                  begin,
-                  end,
-                  range_data_vec),
-                  number_of_residuals),
-          nullptr, knot_vec[0].translation(), knot_vec[0].rotation()
-          , knot_vec[1].translation(), knot_vec[1].rotation()
-          , knot_vec[2].translation(), knot_vec[2].rotation()
-          , knot_vec[3].translation(), knot_vec[3].rotation());
+//  ceres::DynamicAutoDiffCostFunction<NurbsControlPointDynamicCostFunctor, 4>* cost_function =
+//    new ceres::DynamicAutoDiffCostFunction<NurbsControlPointDynamicCostFunctor, 4>(
+//      new NurbsControlPointDynamicCostFunctor(options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
+//                                              control_points.size(),
+//                                              *hybrid_grid,
+//                                              begin,
+//                                              end,
+//                                              range_data_vec));
+//  cost_function->SetNumResiduals(number_of_residuals);
+//  std::vector<double*> param_blocks;
+//  for (int i = 0; i < control_points.size(); i++){
+//    cost_function->AddParameterBlock(3);
+//    cost_function->AddParameterBlock(4);
+//    param_blocks.push_back(ceres_pose_control_points[i].translation());
+//    param_blocks.push_back(ceres_pose_control_points[i].rotation());
+//  }
+//  problem.AddResidualBlock(cost_function, nullptr, param_blocks);
+  LOG(INFO)<<"test";
 //  problem.AddResidualBlock(
-//          new ceres:: AutoDiffCostFunction<NurbsKnotWeightstAutoCostFunctor,
-//          ceres::DYNAMIC, 3,4,3,4,3,4,3,4,4>(
-//              new NurbsKnotWeightstAutoCostFunctor(
+//          new ceres:: AutoDiffCostFunction<NurbsControlPointCostFunctor,
+//          ceres::DYNAMIC, 3,4,3,4,3,4,3,4,3,4>(
+//              new NurbsControlPointCostFunctor(
 //                  options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
 //                  *hybrid_grid,
 //                  begin,
 //                  end,
-//                  range_data_vec),
+//                  range_data_vec,
+//                  ray_tracer_),
 //                  number_of_residuals),
-//          nullptr, knot_vec[0].translation(), knot_vec[0].rotation()
-//          , knot_vec[1].translation(), knot_vec[1].rotation()
-//          , knot_vec[2].translation(), knot_vec[2].rotation()
-//          , knot_vec[3].translation(), knot_vec[3].rotation()
-//          , weight_vec.data());
-//  std::vector<int> const_para = {0, 3};
-//  std::unique_ptr<ceres::LocalParameterization> subset_para =  common::make_unique<ceres::SubsetParameterization>(4, const_para);
-//  problem.SetParameterization(weight_vec.data(),subset_para.release());
-//  problem.SetParameterLowerBound(weight_vec.data(), 1, 0);
-//  problem.SetParameterUpperBound(weight_vec.data(), 1, 1);
-//  problem.SetParameterLowerBound(weight_vec.data(), 2, 0);
-//  problem.SetParameterUpperBound(weight_vec.data(), 2, 1);
-//  for (int i = 0; i < knot_vec.size(); i++){
-//    std::unique_ptr<ceres::LocalParameterization> parametrization = common::make_unique<ceres::AutoDiffLocalParameterization<
-//        YawOnlyQuaternionPlus, 4, 1>>();
-//    problem.SetParameterization(knot_vec[0].rotation(), parametrization.release());
+//          nullptr, ceres_pose_control_points[0].translation(), ceres_pose_control_points[0].rotation()
+//          , ceres_pose_control_points[1].translation(), ceres_pose_control_points[1].rotation()
+//          , ceres_pose_control_points[2].translation(), ceres_pose_control_points[2].rotation()
+//          , ceres_pose_control_points[3].translation(), ceres_pose_control_points[3].rotation()
+//          , ceres_pose_control_points[4].translation(), ceres_pose_control_points[4].rotation());
+//  problem.AddResidualBlock(
+//          new ceres:: AutoDiffCostFunction<NurbsTranslationAccelerationDeltaFunctor,
+//          ceres::DYNAMIC, 3,4,3,4,3,4,3,4,3,4>(
+//              new NurbsTranslationAccelerationDeltaFunctor(
+//                  options_.translation_weight()/std::sqrt(static_cast<double>(3 * linear_acc_data_vector.size())),
+//                  linear_acc_data_vector,
+//                  begin,
+//                  end),
+//                  3 * linear_acc_data_vector.size()),
+//          nullptr, ceres_pose_control_points[0].translation(), ceres_pose_control_points[0].rotation()
+//          , ceres_pose_control_points[1].translation(), ceres_pose_control_points[1].rotation()
+//          , ceres_pose_control_points[2].translation(), ceres_pose_control_points[2].rotation()
+//          , ceres_pose_control_points[3].translation(), ceres_pose_control_points[3].rotation()
+//          , ceres_pose_control_points[4].translation(), ceres_pose_control_points[4].rotation());
+//  problem.AddResidualBlock(
+//          new ceres:: AutoDiffCostFunction<NurbsRotationVelocityDeltaFunctor,
+//          ceres::DYNAMIC, 3,4,3,4,3,4,3,4,3,4>(
+//              new NurbsRotationVelocityDeltaFunctor(
+//                  options_.rotation_weight()/std::sqrt(static_cast<double>(3 * imu_angular_vel_data_vector.size())),
+//                  imu_angular_vel_data_vector,
+//                  begin,
+//                  end),
+//                  3 * imu_angular_vel_data_vector.size()),
+//          nullptr, ceres_pose_control_points[0].translation(), ceres_pose_control_points[0].rotation()
+//          , ceres_pose_control_points[1].translation(), ceres_pose_control_points[1].rotation()
+//          , ceres_pose_control_points[2].translation(), ceres_pose_control_points[2].rotation()
+//          , ceres_pose_control_points[3].translation(), ceres_pose_control_points[3].rotation()
+//          , ceres_pose_control_points[4].translation(), ceres_pose_control_points[4].rotation());
+  freeSpaceEstimator(ceres_pose_control_points,
+                     problem,
+                     number_of_residuals,
+                     hybrid_grid,
+                     decay_grid,
+                     begin,
+                     end,
+                     range_data_vec);
+//  for (int i = 0; i < ceres_pose_control_points.size(); i++)
+//  {
+//    for (int j = 0; j < 4; j++)
+//    {
+//      problem.SetParameterLowerBound(ceres_pose_control_points[i].rotation(), j, -1);
+//      problem.SetParameterUpperBound(ceres_pose_control_points[i].rotation(), j, 1);
+//    }
 //  }
+
+//  for (int i = 0; i < control_points.size(); i++){
+//    problem.AddResidualBlock(
+//        new ceres::AutoDiffCostFunction<TranslationDeltaCostFunctor, 3, 3>(
+//            new TranslationDeltaCostFunctor(options_.translation_weight(),
+//                                            ceres_pose_control_points[i].ToRigid())),
+//    nullptr, ceres_pose_control_points[i].translation());
+//     problem.AddResidualBlock(
+//         new ceres::AutoDiffCostFunction<RotationDeltaCostFunctor, 3, 4>(
+//             new RotationDeltaCostFunctor(options_.rotation_weight(),
+//                                          ceres_pose_control_points[i].ToRigid().rotation())),
+//         nullptr, ceres_pose_control_points[i].rotation());
+//  }
+  LOG(INFO)<<"finished";
   ceres::Solve(ceres_solver_options_, &problem, summary);
+  LOG(INFO)<<"solve";
   LOG(INFO)<<summary->FullReport();
-  for (int i = 0; i < knot_vec.size(); i++){
-    LOG(INFO)<<"knot "<<i<<" after: "<<knot_vec[i].ToRigid();
-    knot_vector[i] = knot_vec[i].ToRigid();
+  for (int i = 0; i < ceres_pose_control_points.size(); i++){
+    control_points[i] = ceres_pose_control_points[i].ToRigid();
+    Eigen::Quaterniond quat_norm = control_points[i].rotation();
+    quat_norm.normalize();
+    Eigen::Matrix3d rot_mat = Eigen::Matrix3d(quat_norm);
+    Eigen::Vector3d angles = rot_mat.eulerAngles(0, 1, 2);
+    LOG(INFO)<<" roll: "<<angles(0)*180/M_PI<<" pitch: "<<angles(1)*180/M_PI<<" yaw: "<<angles(2)*180/M_PI;
+    control_points[i] = transform::Rigid3d(control_points[i].translation(), quat_norm);
+    LOG(INFO)<<"knot "<<i<<" after: "<<ceres_pose_control_points[i].ToRigid();
   }
+
+}
+void CeresScanMatcher::freeSpaceEstimator(std::vector<CeresPose>& ceres_pose_control_points,
+                                          ceres::Problem& problem,
+                                          const int& number_of_residuals,
+                                          const HybridGrid* hybrid_grid,
+                                          const HybridDecayGrid* decay_grid,
+                                          const common::Time& begin,
+                                          const common::Time& end,
+                                          const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec)
+{
+  problem.AddResidualBlock(
+            new ceres::AutoDiffCostFunction<NurbsControlPointFreeSpaceCostFunctor, ceres::DYNAMIC,3,4,3,4,3,4,3,4,3,4>(
+                new NurbsControlPointFreeSpaceCostFunctor(
+                    options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(number_of_residuals)),
+                    *hybrid_grid,
+                    decay_grid,
+                    begin,
+                    end,
+                    range_data_vec,
+                    ray_tracer_,
+                    options_.ray_tracer_line_size()), number_of_residuals),
+            nullptr, ceres_pose_control_points[0].translation(), ceres_pose_control_points[0].rotation()
+            , ceres_pose_control_points[1].translation(), ceres_pose_control_points[1].rotation()
+            , ceres_pose_control_points[2].translation(), ceres_pose_control_points[2].rotation()
+            , ceres_pose_control_points[3].translation(), ceres_pose_control_points[3].rotation()
+            , ceres_pose_control_points[4].translation(), ceres_pose_control_points[4].rotation());
+//  problem.AddResidualBlock(
+//          new ceres::NumericDiffCostFunction<NurbsControlPointFreeSpaceCostFunctor,
+//          ceres::FORWARD, ceres::DYNAMIC,3,4,3,4,3,4,3,4,3,4>(
+//              new NurbsControlPointFreeSpaceCostFunctor(
+//                  options_.occupied_space_weight(0)/std::sqrt(static_cast<double>(options_.ray_tracer_line_size() * number_of_residuals)),
+//                  *hybrid_grid,
+//                  decay_grid,
+//                  begin,
+//                  end,
+//                  range_data_vec,
+//                  ray_tracer_,
+//                  options_.ray_tracer_line_size()), ceres::TAKE_OWNERSHIP, options_.ray_tracer_line_size() * number_of_residuals),
+//          nullptr, ceres_pose_control_points[0].translation(), ceres_pose_control_points[0].rotation()
+//          , ceres_pose_control_points[1].translation(), ceres_pose_control_points[1].rotation()
+//          , ceres_pose_control_points[2].translation(), ceres_pose_control_points[2].rotation()
+//          , ceres_pose_control_points[3].translation(), ceres_pose_control_points[3].rotation()
+//          , ceres_pose_control_points[4].translation(), ceres_pose_control_points[4].rotation());
 
 }
 

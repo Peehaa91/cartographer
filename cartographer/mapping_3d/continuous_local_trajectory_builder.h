@@ -57,7 +57,7 @@ class ContinuousLocalTrajectoryBuilder {
   common::Time last_update_time_ = common::Time::min();
   common::Time last_scan_match_time_ = common::Time::min();
   transform::Rigid3d last_control_pose_estimate_ = transform::Rigid3d::Identity();
-  mapping_3d::ActiveSubmaps active_submaps_;
+  mapping_3d::ActiveSubmapsDecay active_submaps_;
   std::unique_ptr<scan_matching::RealTimeCorrelativeScanMatcher>
       real_time_correlative_scan_matcher_;
 
@@ -67,6 +67,8 @@ class ContinuousLocalTrajectoryBuilder {
   std::vector<PoseEstimate> pose_vec_;
   std::unique_ptr<mapping::ImuTracker> imu_tracker_;
   std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vector_;
+  std::vector<std::pair<common::Time, Eigen::Vector3d>> imu_angular_vel_data_vector_;
+  std::vector<std::pair<common::Time, Eigen::Vector3d>> linear_acc_data_vector_;
   Eigen::Vector3d acceleration_estimate_ = Eigen::Vector3d::Zero();
   LocalPoseGraph local_pose_graph_;
   int num_accumulated_ = 0;
@@ -75,7 +77,7 @@ class ContinuousLocalTrajectoryBuilder {
   transform::Rigid3f first_pose_estimate_ = transform::Rigid3f::Identity();
   transform::Rigid3d pose_estimate_ = transform::Rigid3d::Identity();
   sensor::RangeData accumulated_range_data_;
-  std::shared_ptr<mapping_3d::Submap> scan_matcher_submap_;
+  std::shared_ptr<mapping_3d::SubmapDecay> scan_matcher_submap_;
 
 };
 }

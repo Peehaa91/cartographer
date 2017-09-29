@@ -79,7 +79,7 @@ class LocalTrajectoryBuilder {
       const transform::Rigid3d& pose_observation);
 
   const proto::LocalTrajectoryBuilderOptions options_;
-  mapping_3d::ActiveSubmapsDecay active_submaps_;
+  mapping_3d::ActiveSubmaps active_submaps_;
 
   PoseEstimate last_pose_estimate_;
 

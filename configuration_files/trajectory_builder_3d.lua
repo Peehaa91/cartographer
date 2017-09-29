@@ -44,9 +44,10 @@ TRAJECTORY_BUILDER_3D = {
   ceres_scan_matcher = {
     occupied_space_weight_0 = 1.,
     occupied_space_weight_1 = 6.,
-    translation_weight = 5.,
+    translation_weight = 5,
     rotation_weight = 4e2,
-    only_optimize_yaw = false,
+    only_optimize_yaw = true,
+    ray_tracer_line_size = 2,
     ceres_solver_options = {
       use_nonmonotonic_steps = false,
       max_num_iterations = 100,
@@ -60,22 +61,23 @@ TRAJECTORY_BUILDER_3D = {
     max_angle_radians = 0.004,
   },
 
-  imu_gravity_time_constant = 0.,
+  imu_gravity_time_constant = 10.,
   num_odometry_states = 1,
 
   submaps = {
     high_resolution = 0.10,
     high_resolution_max_range = 20.,
     low_resolution = 0.45,
-    num_range_data = 160,
+    num_range_data = 32,
     range_data_inserter = {
       hit_probability = 0.55,
       miss_probability = 0.49,
-      num_free_space_voxels = 2,
+      num_free_space_voxels = 50,
     },
   },
   local_pose_graph = {
    knot_type = "uniform", 
    weight_type = "rational",
+   debug = true,
   },
 }

@@ -43,6 +43,8 @@ proto::CeresScanMatcherOptions CreateCeresScanMatcherOptions(
       parameter_dictionary->GetDouble("translation_weight"));
   options.set_rotation_weight(
       parameter_dictionary->GetDouble("rotation_weight"));
+  options.set_ray_tracer_line_size(
+        parameter_dictionary->GetInt("ray_tracer_line_size"));
   *options.mutable_ceres_solver_options() =
       common::CreateCeresSolverOptionsProto(
           parameter_dictionary->GetDictionary("ceres_solver_options").get());

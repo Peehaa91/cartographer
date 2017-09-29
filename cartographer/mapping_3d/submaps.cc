@@ -289,6 +289,12 @@ const HybridGrid& SubmapDecay::high_resolution_hybrid_grid() const {
 const HybridGrid& SubmapDecay::low_resolution_hybrid_grid() const {
   return low_resolution_hybrid_grid_;
 }
+const HybridDecayGrid& SubmapDecay::high_resolution_hybrid_decay_grid() const {
+  return high_resolution_hybrid_decay_grid_;
+}
+const HybridDecayGrid& SubmapDecay::low_resolution_hybrid_decay_grid() const {
+  return low_resolution_hybrid_decay_grid_;
+}
 
 void SubmapDecay::ToResponseProto(
     const transform::Rigid3d& global_submap_pose,

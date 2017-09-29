@@ -80,7 +80,8 @@ RangeDataInserter::RangeDataInserter(
       hit_table_(mapping::ComputeLookupTableToApplyOdds(
           mapping::Odds(options_.hit_probability()))),
       miss_table_(mapping::ComputeLookupTableToApplyOdds(
-          mapping::Odds(options_.miss_probability()))) {}
+          mapping::Odds(options_.miss_probability()))),
+      ray_tracer_(RayTracer(options.num_free_space_voxels())){}
 
 void RangeDataInserter::Insert(const sensor::RangeData& range_data,
                                HybridGrid* hybrid_grid) const {
@@ -121,10 +122,13 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
     std::vector<Eigen::Array3i> line;
     Eigen::Array3i hit_cell = hybrid_decay_grid->GetCellIndex(hit);
     hybrid_decay_grid->increaseHitCount(hit_cell);
-    double distance = 0.5;
-    hybrid_decay_grid->increaseRayAccumulation(hit_cell, distance);
+    //double distance = 0.5;
     //LOG(INFO)<<"hit count: "<<std::get<1>(*(hybrid_grid->mutable_value(hit_cell)));
     Eigen::Array3i direction = origin - hit_cell;
+    Eigen::Vector3f slope(direction[0], direction[1], direction[2]);
+    double distance = 0.5*calculateRayLengthInVoxel(slope, origin, hit_cell);
+//    LOG(INFO)<<"hit dist:"<<distance;
+    hybrid_decay_grid->increaseRayAccumulation(hit_cell, distance);
 //    LOG(INFO) << "hit: " << hit_cell << std::endl
 //              << " origin: " << origin << std::endl
 //              << " direction: " << direction;
@@ -190,14 +194,17 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
       // "<<current_key(1)
       //    <<std::endl<<" cell_z: "<<current_key(2);
       line.insert(line.begin(), current_key);
+      double dist = calculateRayLengthInVoxel(slope, origin, current_key);
+//      LOG(INFO)<<current_key;
+//      LOG(INFO)<<"dist: "<<dist;
       if ((current_key(0) == origin(0) && current_key(1) == origin(1) &&
           current_key(2) == origin(2)) || line.size() == line_size) {
-        double dist = 1;
+        //double dist = calculateRayLengthInVoxel;
         hybrid_decay_grid->increaseRayAccumulation(current_key, dist);
         done = true;
       }
       else {
-        double dist = 1;
+        //double dist = 1;
         hybrid_decay_grid->increaseRayAccumulation(current_key, dist);
         //LOG(INFO)<<"dist: "<<dist;
       }
@@ -216,11 +223,65 @@ void RangeDataInserter::setProbabilities(const std::vector<std::vector<Eigen::Ar
 {
   for (const std::vector<Eigen::Array3i>& line : lines){
     for (const Eigen::Array3i& index : line){
-//     LOG(INFO)<<"index: "<<index<<" prob: "<<hybrid_decay_grid->GetProbabilityFromDecay(index);
+//     LOG(INFO)<<"index: "<<index<<" prob: "<<hybrid_decay_grid->GetProbability(index);
      hybrid_grid->SetProbability(index, hybrid_decay_grid->GetProbability(index));
     }
   }
 }
+
+double RangeDataInserter::DistanceToRay(Eigen::Vector3f slope, Eigen::Vector3f& cell, Eigen::Vector3f& origin) const
+{
+  Eigen::Vector3f diff = origin - cell;
+  slope.normalize();
+  Eigen::Vector3f line_point = origin - (diff.dot(slope)*slope);
+  return (diff - (diff.dot(slope)*slope)).norm();
+
+}
+
+double RangeDataInserter::calculateRayLengthInVoxel(Eigen::Vector3f& slope,
+                                                    Eigen::Array3i& origin,
+                                                    Eigen::Array3i& cell) const
+{
+  double t;
+  Eigen::Vector3f cell_f(cell[0], cell[1], cell[2]);
+  double scaling_factor = 1;
+  if (origin[0] == cell[0] && origin[1] == cell[1] && origin[2] == cell[2])
+    scaling_factor = 0.5;
+  Eigen::Vector3f origin_f(origin[0], origin[1], origin[2]);
+  DistanceToRay(slope, cell_f, origin_f);
+  std::vector<Eigen::Vector3f> intersections;
+  std::vector<Eigen::Vector3f> normals = {Eigen::Vector3f::UnitX(),
+      Eigen::Vector3f::UnitY(), Eigen::Vector3f::UnitZ()};
+  for (Eigen::Vector3f& normal : normals)
+  {
+    for (double i = -0.5; i < 1.5; i++)
+    {
+      Eigen::Vector3f point_diff = cell_f + i*normal - origin_f;
+      double inner_product_slope_normal = slope.dot(normal);
+      if (inner_product_slope_normal == 0.0)
+        continue;
+      t = point_diff.dot(normal)/inner_product_slope_normal;
+      Eigen::Vector3f intersection = t*slope + origin_f;
+      if (checkInsideVoxel(cell_f ,intersection))
+      {
+        intersections.push_back(intersection);
+      }
+      if (intersections.size() == 2)
+        return scaling_factor*((intersections[1] - intersections[0]).norm());
+
+    }
+  }
+  return 0;
+}
+bool RangeDataInserter::checkInsideVoxel(Eigen::Vector3f& cell, Eigen::Vector3f& point) const
+{
+  Eigen::Vector3f diff = cell - point;
+  if (diff.norm() <= sqrt(3)/2.0)
+    return true;
+  else
+    return false;
+}
+
 float SlowValueToProbability(const uint16 value) {
   CHECK_GE(value, 0);
   CHECK_LE(value, 32767);

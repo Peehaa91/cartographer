@@ -191,6 +191,9 @@ public:
     return knots_;
   }
 
+  void setKnots(KnotsT& knots) {
+    knots_ = knots;
+  }
   int getKnotIdx(int dim, int degree, T u) const {
     const auto& knot = knots_[dim];
     return (int)std::distance(knot.begin(),
@@ -292,15 +295,6 @@ public:
     }
   }
 
-//  int getKnotIdx(int dim, int degree, T u) const {
-//    auto idx = degree + (int)(u / knotDeltas_[dim]);
-//    if (idx == pointDims_[dim]) {
-//      idx = pointDims_[dim] - 1;
-//    }
-//    assert(idx >= degree && idx < pointDims_[dim]);
-//    return idx;
-//  }
-
   int getKnotIdx(int dim, int degree, double u) const {
     auto idx = (degree) + (int)(u / knotDeltas_[dim]);
     if (idx == (pointDims_[dim])) {
@@ -309,41 +303,6 @@ public:
     assert(idx >= (degree) && idx < (pointDims_[dim]));
     return idx;
   }
-
-//  template <typename OutIter>
-//  void computeBasis(int k, int dim, int degree, T u, OutIter n) const {
-//    n[0] = T(1.0);
-//
-//    if (k < 2 * degree - 1 || k >= pointDims_[dim] - degree + 1) {
-//      //this can be done more efficient
-//      const auto& knot = knots_[dim];
-//      for (int i = 1; i <= degree; ++i) {
-//        n[i] = T(0.0);
-//
-//        for (int j = i - 1; j >= 0; --j) {
-//          T a = T(0.0);
-//          if (knot[k + i - j] != knot[k - j]) {
-//            a = (u - knot[k - j]) / (knot[k + i - j] - knot[k - j]);
-//          }
-//
-//          n[j + 1] += n[j] * (T(1.0) - a);
-//          n[j] = n[j] * a;
-//        }
-//      }
-//    } else {
-//      auto m = u / knotDeltas_[dim] - (T(k - degree));
-//
-//      for (int i = 1; i <= degree; ++i) {
-//        n[i] = T(0.0);
-//
-//        for (int j = i - 1; j >= 0; --j) {
-//          auto a = (m + T(j)) / T(i);
-//          n[j + 1] += n[j] * (T(1.0) - a);
-//          n[j] = n[j] * a;
-//        }
-//      }
-//    }
-//  }
 
   template <typename OutIter>
     void computeBasis(int k, int dim, int degree, double u, OutIter n) const {
@@ -379,41 +338,6 @@ public:
         }
       }
     }
-//  template <typename OutIter>
-//  void computeBasis(T k, int dim, int degree, T u, OutIter n) const {
-//    n[0] = T(1.0);
-//
-//    if (k < T(2 * degree - 1) || k >= T(pointDims_[dim] - degree + 1)) {
-//      //this can be done more efficient
-//      const auto& knot = knots_[dim];
-//      for (T i = T(1); i <= T(degree); i + T(1)) {
-//        n[i] = T(0.0);
-//
-//        for (T j = i - T(1); j >= T(0); j - T(1)) {
-//          T a = T(0.0);
-//          if (knot[k + i - j] != knot[k - j]) {
-//            a = (u - knot[k - j]) / (knot[k + i - j] - knot[k - j]);
-//          }
-//
-//          n[j + 1] += n[j] * (T(1.0) - a);
-//          n[j] = n[j] * a;
-//        }
-//      }
-//    } else {
-//      auto m = u / knotDeltas_[dim] - (T(k - degree));
-//
-//      for (T i = T(1); i <= T(degree); i + T(1)) {
-//        n[i] = T(0.0);
-//
-//        for (T j = i - T(1); j >= 0; j - T(1)) {
-//          auto a = (m + T(j)) / T(i);
-//          n[j + 1] += n[j] * (T(1.0) - a);
-//          n[j] = n[j] * a;
-//        }
-//      }
-//    }
-//  }
-
 
   T getMinU(int /*inputD*/) const {
     return T(0.0);
@@ -676,6 +600,8 @@ public:
     weights_.getPoint(ns, ks, degrees_, points_, rBegin);
   }
 
+
+
   template <typename InIter, typename IdxIter, typename BaseIter>
   void getBasis(InIter uBegin, IdxIter idxIter, BaseIter baseIter) const {
     for (int dim = 0; dim < (int)inputDim; ++dim) {
@@ -688,6 +614,28 @@ public:
       n.resize(degree + 1);
 
       k = knots_.getKnotIdx(dim, degree, u);
+      //T k_templated = knots_.getKnotIdx(dim, degree, u);;
+      knots_.computeBasis(k, dim, degree, u, n.begin());
+      assert(isBaseCorrect(n.begin(), n.end()));
+
+      ++uBegin;
+      ++idxIter;
+      ++baseIter;
+    }
+  }
+
+  template <typename InIter, typename IdxIter, typename BaseIter>
+  void getDerivBasis(InIter uBegin, IdxIter idxIter, BaseIter baseIter) const {
+    for (int dim = 0; dim < (int)inputDim; ++dim) {
+      const auto& degree = degrees_[dim] - 1;
+      const auto& u = *uBegin;
+
+      auto& k = *idxIter;
+      auto& n = *baseIter;
+
+      n.resize(degree);
+
+      k = knots_.getKnotIdx(dim, degree - 1, u);
       //T k_templated = knots_.getKnotIdx(dim, degree, u);;
       knots_.computeBasis(k, dim, degree, u, n.begin());
       assert(isBaseCorrect(n.begin(), n.end()));

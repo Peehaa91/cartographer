@@ -29,6 +29,8 @@
 #include "cartographer/common/time.h"
 #include "cartographer/sensor/range_data.h"
 #include "cartographer/mapping_3d/scan_matching/nurbs.h"
+#include "cartographer/mapping_3d/ray_tracer.h"
+#include "cartographer/mapping_3d/ceres_pose.h"
 
 namespace cartographer {
 namespace mapping_3d {
@@ -67,15 +69,27 @@ class CeresScanMatcher {
              ceres::Solver::Summary* summary);
 
   void Match(const HybridGrid* hybrid_grid,
+             const HybridDecayGrid* decay_grid,
              const common::Time& begin,
              const common::Time& end,
              const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
-             std::vector<transform::Rigid3d>& knot_vector,
+             std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_angular_vel_data_vector,
+             std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
+             std::vector<transform::Rigid3d>& control_points,
              std::vector<double>& weight_vec,
              ceres::Solver::Summary* summary);
 
  private:
+  void freeSpaceEstimator(std::vector<CeresPose>& ceres_pose_control_points,
+                          ceres::Problem& problem,
+                          const int& number_of_residuals,
+                          const HybridGrid* hybrid_grid,
+                          const HybridDecayGrid* decay_grid,
+                          const common::Time& begin,
+                          const common::Time& end,
+                          const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec);
   const proto::CeresScanMatcherOptions options_;
+  std::shared_ptr<cartographer::mapping_3d::RayTracer> ray_tracer_;
   ceres::Solver::Options ceres_solver_options_;
 };
 

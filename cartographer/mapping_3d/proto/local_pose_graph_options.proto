@@ -19,5 +19,6 @@ package cartographer.mapping_3d.proto;
 message LocalPoseGraphOptions {
   optional string knot_type = 1;
   optional string weight_type = 2;
+  optional bool debug = 3;
 
 }

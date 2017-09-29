@@ -433,6 +433,15 @@ class HybridGridBase : public Grid<ValueType> {
                           common::RoundToInt(index.z()));
   }
 
+//  template <typename T>
+//  Eigen::Array<T,3,1> GetCellIndex(const Eigen::Matrix<T,3,1> point) const {
+//    Eigen::Array<T,3,1> index;// = point.array() / resolution_;
+//    index[0] = point[0] / T(resolution_);
+//    index[1] = point[1] / T(resolution_);
+//    index[2] = point[2] / T(resolution_);
+//    return index;
+//  }
+
   // Returns one of the octants, (0, 0, 0), (1, 0, 0), ..., (1, 1, 1).
   static Eigen::Array3i GetOctant(const int i) {
     DCHECK_GE(i, 0);
@@ -542,6 +551,12 @@ class HybridDecayGrid
     double rate  = std::get<1>(value(index))/std::get<2>(value(index));
     double prob = decayRateToProbability(rate);
     return prob;
+  }
+
+  double GetDecayRate(const Eigen::Array3i& index) const{
+    if (std::get<1>(value(index)) == 0)
+      return 0;
+    return std::get<1>(value(index))/std::get<2>(value(index));
   }
  private:
   double decayRateToProbability(double rate) const{
