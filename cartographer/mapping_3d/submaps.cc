@@ -361,7 +361,7 @@ void SubmapDecay::InsertRangeData(const sensor::RangeData& range_data,
   auto duration = std::chrono::high_resolution_clock::now() - begin_time;
   auto delta_t = std::chrono::duration_cast<std::chrono::microseconds>(
       duration);
-  LOG(INFO)<<"ges res update: "<<delta_t.count();
+//  LOG(INFO)<<"ges res update: "<<delta_t.count();
 //  begin_time = std::chrono::high_resolution_clock::now();
 //  LOG(INFO)<<"high update finished";
 //  range_data_inserter.Insert(transformed_range_data,
@@ -445,13 +445,14 @@ int ActiveSubmapsDecay::matching_index() const {
 
 void ActiveSubmapsDecay::InsertRangeData(
     const sensor::RangeData& range_data,
-    const Eigen::Quaterniond& gravity_alignment) {
+    const Eigen::Quaterniond& gravity_alignment,
+    bool last_range_data) {
 //  LOG(INFO)<<"decay called";
   for (auto& submap : submaps_) {
     submap->InsertRangeData(range_data, range_data_inserter_,
                             options_.high_resolution_max_range());
   }
-  if (submaps_.back()->num_range_data() == options_.num_range_data()) {
+  if (submaps_.back()->num_range_data() >= options_.num_range_data() && last_range_data) {
     AddSubmap(
         transform::Rigid3d(range_data.origin.cast<double>(),
                            gravity_alignment));

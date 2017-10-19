@@ -36,16 +36,36 @@ class NurbsRotationVelocityDeltaFunctor {
         end_(end){
     for (auto& rot_vel : initial_rotation)
     {
-      Eigen::Quaterniond quat = transform::AngleAxisVectorToRotationQuaternion(rot_vel.second);
-      Eigen::Quaterniond quat_inv(quat.w(), -quat.x(), -quat.y(), -quat.z());
-      initial_rotation_vel_inverse_.push_back(std::make_pair(rot_vel.first,
-                                                             quat_inv));
+//      Eigen::Quaterniond quat = transform::AngleAxisVectorToRotationQuaternion(rot_vel.second);
+//      quat.normalize();
+//      Eigen::Quaterniond quat_inv(quat.w(), -quat.x(), -quat.y(), -quat.z());
+
+      initial_angular_vel_.push_back(std::make_pair(rot_vel.first,
+                                                    rot_vel.second));
     }
 
   }
 
   NurbsRotationVelocityDeltaFunctor(const NurbsRotationVelocityDeltaFunctor&) = delete;
   NurbsRotationVelocityDeltaFunctor& operator=(const NurbsRotationVelocityDeltaFunctor&) = delete;
+
+  template<typename T>
+  double getScalar(const T& jet) const {
+    return ceres::Jet<double, 35>(jet).a;
+  }
+
+  template<typename T>
+  T getVelocityDiff(const T& v1, const double& v2) const
+  {
+    T diff = v1 - v2;
+    if (diff < - T(M_PI)){
+      diff += T(2*M_PI);
+    }
+    if (diff > T(M_PI)){
+      diff -= T(2*M_PI);
+    }
+    return diff;
+  }
 
   template <typename T>
   bool operator()(const T* const point_1_trans, const T* const point_1_rotation,
@@ -96,37 +116,53 @@ class NurbsRotationVelocityDeltaFunctor {
     weights_deriv.create(points_deriv.shape());
     nurbs_deriv.init(degree -1, knots_deriv, weights_deriv, points_deriv);
 
-    int numSamplePoints = initial_rotation_vel_inverse_.size();
+    int numSamplePoints = initial_angular_vel_.size();
       int counter = 0 ;
       for (int i = 0; i < numSamplePoints; ++i) {
-        double point = ((common::ToSeconds(initial_rotation_vel_inverse_[i].first - begin_)
+        double point = ((common::ToSeconds(initial_angular_vel_[i].first - begin_)
                   / common::ToSeconds(end_ - begin_)));
         std::array<T, output_dim> output;
         nurbs_deriv.getPoint(&point, output.begin());
-        T delta[4];
-        T initial_rotation_inverse[4] = {
-            T(initial_rotation_vel_inverse_[i].second.w()), T(initial_rotation_vel_inverse_[i].second.x()),
-            T(initial_rotation_vel_inverse_[i].second.y()), T(initial_rotation_vel_inverse_[i].second.z())};
-        T rotation_vel[4] = {
-                    T(output[6]), T(output[3]),
-                    T(output[4]), T(output[5])};
-        ceres::QuaternionProduct(initial_rotation_inverse, rotation_vel,
-                                 delta);
+//        T delta[4];
+//        T initial_rotation_inverse[4] = {
+//            T(initial_angular_vel_[i].second.w()), T(initial_angular_vel_[i].second.x()),
+//            T(initial_angular_vel_[i].second.y()), T(initial_angular_vel_[i].second.z())};
+        Eigen::Quaternion<T> rotation_vel(
+                    output[6], output[3],
+                    output[4], output[5]);
+        Eigen::Matrix<T, 3, 1> angular_vel = rotation_vel.toRotationMatrix().eulerAngles(0, 1, 2);
+//        ceres::QuaternionProduct(initial_rotation_inverse, rotation_vel,
+//                                 delta);
+
+//        Eigen::Quaternion<T> quat = Eigen::Quaternion<T>(output[6],output[3],output[4],output[3]);
+//        Eigen::Matrix<T, 3, 1> angles = quat.toRotationMatrix().eulerAngles(0, 1, 2);
         // Will compute the squared norm of the imaginary component of the delta
         // quaternion which is sin(phi/2)^2.
-        residual[counter] = scaling_factor_ * delta[1];
+//        LOG(INFO)<<"output x:"<<getScalar(angular_vel[0])<<"init x: "<<initial_angular_vel_[i].second[0];
+//        LOG(INFO)<<"output y:"<<getScalar(angular_vel[1])<<"init y: "<<initial_angular_vel_[i].second[1];
+//        LOG(INFO)<<"output z:"<<getScalar(angular_vel[2])<<"init z: "<<initial_angular_vel_[i].second[2];
+//        LOG(INFO)<<"diff x:"<<getScalar(getVelocityDiff(angular_vel[0], initial_angular_vel_[i].second[0]));
+//        LOG(INFO)<<"diff y:"<<getScalar(getVelocityDiff(angular_vel[1], initial_angular_vel_[i].second[1]));
+//        LOG(INFO)<<"diff z:"<<getScalar(getVelocityDiff(angular_vel[2], initial_angular_vel_[i].second[2]));
+        residual[counter] = scaling_factor_ * getVelocityDiff(angular_vel[0], initial_angular_vel_[i].second[0]) ;
         counter++;
-        residual[counter] = scaling_factor_ * delta[2];
+        residual[counter] = scaling_factor_ * getVelocityDiff(angular_vel[1], initial_angular_vel_[i].second[1]);
         counter++;
-        residual[counter] = scaling_factor_ * delta[3];
+        residual[counter] = scaling_factor_ * getVelocityDiff(angular_vel[2], initial_angular_vel_[i].second[2]);
         counter++;
+//        residual[counter] = scaling_factor_ * (angles[0] - T(initial_rotation_vel_inverse_[i].second[0]));
+//        counter++;
+//        residual[counter] = scaling_factor_ * (angles[1] - T(initial_rotation_vel_inverse_[i].second[1]));;
+//        counter++;
+//        residual[counter] = scaling_factor_ * (angles[2] - T(initial_rotation_vel_inverse_[i].second[2]));;
+//        counter++;
       }
     return true;
   }
 
  private:
   const double scaling_factor_;
-  std::vector<std::pair<common::Time, Eigen::Quaterniond>> initial_rotation_vel_inverse_;
+  std::vector<std::pair<common::Time, Eigen::Vector3d>> initial_angular_vel_;
   const common::Time begin_;
   const common::Time end_;
 };

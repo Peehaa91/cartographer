@@ -42,16 +42,16 @@ TRAJECTORY_BUILDER_3D = {
   },
 
   ceres_scan_matcher = {
-    occupied_space_weight_0 = 1.,
+    occupied_space_weight_0 = 10.,
     occupied_space_weight_1 = 6.,
-    translation_weight = 5,
-    rotation_weight = 4e2,
+    translation_weight = 2,
+    rotation_weight = 1e2,
     only_optimize_yaw = true,
     ray_tracer_line_size = 2,
     ceres_solver_options = {
-      use_nonmonotonic_steps = false,
+      use_nonmonotonic_steps = true,
       max_num_iterations = 100,
-      num_threads = 8,
+      num_threads = 32,
     },
   },
 
@@ -68,7 +68,7 @@ TRAJECTORY_BUILDER_3D = {
     high_resolution = 0.10,
     high_resolution_max_range = 20.,
     low_resolution = 0.45,
-    num_range_data = 32,
+    num_range_data = 16000,
     range_data_inserter = {
       hit_probability = 0.55,
       miss_probability = 0.49,

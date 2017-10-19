@@ -470,10 +470,11 @@ class HybridGridBase : public Grid<ValueType> {
 };
 
 class HybridDecayGrid
-    : public HybridGridBase<std::tuple<uint16, uint16, double>> {
+    : public HybridGridBase<std::tuple<uint16, uint16, double, uint16>> {
  public:
   explicit HybridDecayGrid(const float resolution)
-      : HybridGridBase<std::tuple<uint16, uint16, double>>(resolution) {}
+  //prob value, hit count, view count, sum of rays,
+      : HybridGridBase<std::tuple<uint16, uint16, double, uint16>>(resolution) {}
 
   explicit HybridDecayGrid(const proto::HybridGrid& proto)
       : HybridDecayGrid(proto.resolution()) {
@@ -483,16 +484,22 @@ class HybridDecayGrid
   }
 
   void increaseHitCount(Eigen::Array3i& index) {
-    std::tuple<uint16, uint16, double>* val = mutable_value(index);
+    std::tuple<uint16, uint16, double, uint16>* val = mutable_value(index);
     std::get<1>(*val) += 1;
     if (std::get<2>(*val) != 0)
       std::get<0>(*val) = mapping::ProbabilityToValue(decayRateToProbability(std::get<1>(*val)/std::get<2>(*val)));
   }
 
+  void increaseViewCount(Eigen::Array3i& index) {
+    std::tuple<uint16, uint16, double, uint16>* val = mutable_value(index);
+    std::get<3>(*val) += 1;
+  }
+
   void increaseRayAccumulation(Eigen::Array3i& index, double& dist) {
-    std::tuple<uint16, uint16, double>* val = mutable_value(index);
+    std::tuple<uint16, uint16, double, uint16>* val = mutable_value(index);
     std::get<2>(*val) += dist;
-    std::get<0>(*val) = mapping::ProbabilityToValue(decayRateToProbability(std::get<1>(*val)/std::get<2>(*val)));
+    if (std::get<2>(*val) != 0)
+      std::get<0>(*val) = mapping::ProbabilityToValue(decayRateToProbability(std::get<1>(*val)/std::get<2>(*val)));
   }
   bool ApplyLookupTable(const Eigen::Array3i& index,
                         const std::vector<uint16>& table) {
@@ -529,7 +536,7 @@ class HybridDecayGrid
 
   // Sets the probability of the cell at 'index' to the given 'probability'.
   void SetProbability(const Eigen::Array3i& index, const float probability) {
-    std::tuple<uint16, uint16, double>* val = mutable_value(index);
+    std::tuple<uint16, uint16, double, uint16>* val = mutable_value(index);
     std::get<0>(*val) = mapping::ProbabilityToValue(probability);
   }
   // Finishes the update sequence.
@@ -558,10 +565,15 @@ class HybridDecayGrid
       return 0;
     return std::get<1>(value(index))/std::get<2>(value(index));
   }
+
+  uint16 GetViewCount(const Eigen::Array3i& index) const{
+    return std::get<3>(value(index));
+  }
  private:
   double decayRateToProbability(double rate) const{
 //    LOG(INFO)<<"rate: "<<rate;
-    const double prob = (rate + 0.25)*0.4;
+//    const double prob = (rate + 0.25)*0.4;
+    const double prob = sqrt(3)/2*resolution()*0.8* rate + 0.1;
 //    LOG(INFO)<<"prob: "<<prob;
     return prob;
   }
@@ -627,9 +639,9 @@ class HybridGrid : public HybridGridBase<uint16> {
     DCHECK_EQ(table.size(), mapping::kUpdateMarker);
     uint16* const cell = mutable_value(index);
 //    LOG(INFO)<<"cell_val :"<<*cell<<" prob val look: "<<mapping::ValueToProbability(table[*cell]);
-//    if (*cell >= mapping::kUpdateMarker) {
-//      return false;
-//    }
+    if (*cell >= mapping::kUpdateMarker) {
+      return false;
+    }
     update_indices_.push_back(cell);
     *cell = table[*cell] - mapping::kUpdateMarker;
 //    LOG(INFO)<<"prob look :"<<mapping::ValueToProbability(*cell -mapping::kUpdateMarker);

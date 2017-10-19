@@ -169,7 +169,8 @@ class ActiveSubmapsDecay {
   // used for the orientation of new submaps so that the z axis approximately
   // aligns with gravity.
   void InsertRangeData(const sensor::RangeData& range_data,
-                       const Eigen::Quaterniond& gravity_alignment);
+                       const Eigen::Quaterniond& gravity_alignment,
+                       bool last_range_data);
 
   std::vector<std::shared_ptr<SubmapDecay>> submaps() const;
  private:

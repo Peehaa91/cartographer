@@ -36,15 +36,15 @@ class NurbsControlPointCostFunctor {
   // add to all poses, and point cloud.
   NurbsControlPointCostFunctor(
       const double scaling_factor,
-      const HybridGrid& hybrid_grid,
+      const HybridGrid* hybrid_grid,
       const common::Time& begin,
       const common::Time& end,
       const std::vector<std::pair<common::Time, sensor::RangeData>> range_data_vec,
       const  std::shared_ptr<RayTracer>& ray_tracer)
       : scaling_factor_(scaling_factor),
         range_data_vec_(range_data_vec),
-        interpolated_grid_(hybrid_grid),
-        hybrid_grid_(&hybrid_grid),
+        interpolated_grid_(*hybrid_grid),
+        hybrid_grid_(hybrid_grid),
         begin_(begin),
         end_(end){
     ray_tracer_= std::make_shared<RayTracer>(*ray_tracer);

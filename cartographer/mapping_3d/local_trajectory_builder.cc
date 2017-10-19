@@ -158,12 +158,14 @@ void LocalTrajectoryBuilder::Predict(const common::Time time) {
 std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>
 LocalTrajectoryBuilder::AddAccumulatedRangeData(
     const common::Time time, const sensor::RangeData& range_data_in_tracking) {
+  LOG(INFO)<<"size first before: "<<range_data_in_tracking.returns.size();
   const sensor::RangeData filtered_range_data = {
       range_data_in_tracking.origin,
       sensor::VoxelFiltered(range_data_in_tracking.returns,
                             options_.voxel_filter_size()),
       sensor::VoxelFiltered(range_data_in_tracking.misses,
                             options_.voxel_filter_size())};
+  LOG(INFO)<<"size first after: "<<filtered_range_data.returns.size();
 
   if (filtered_range_data.returns.empty()) {
     LOG(WARNING) << "Dropped empty range data.";
@@ -176,7 +178,7 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
   const transform::Rigid3d model_prediction = pose_estimate_;
   const transform::Rigid3d& pose_prediction = odometry_prediction;
 
-  std::shared_ptr<const Submap> matching_submap =
+  std::shared_ptr<const SubmapDecay> matching_submap =
       active_submaps_.submaps().front();
   LOG(INFO)<<"before inverse: "<<pose_prediction;
   transform::Rigid3d initial_ceres_pose =
@@ -201,13 +203,29 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
       options_.low_resolution_adaptive_voxel_filter_options());
   const sensor::PointCloud low_resolution_point_cloud_in_tracking =
       low_resolution_adaptive_voxel_filter.Filter(filtered_range_data.returns);
-  ceres_scan_matcher_->Match(
+  LOG(INFO)<<"size second after: "<<filtered_point_cloud_in_tracking.size();
+  float res = matching_submap->high_resolution_hybrid_grid().resolution();
+//  const HybridDecayGrid* decay_grid = new HybridDecayGrid(res);
+  const HybridDecayGrid* decay_grid_high = &matching_submap->high_resolution_hybrid_decay_grid();
+  const HybridDecayGrid* decay_grid_low = &matching_submap->low_resolution_hybrid_decay_grid();
+
+  /*Here you can switch the scan matching behaviours*/
+//  ceres_scan_matcher_->Match(
+//      matching_submap->local_pose().inverse() * pose_prediction,
+//      initial_ceres_pose,
+//      {{&filtered_point_cloud_in_tracking,
+//        &matching_submap->high_resolution_hybrid_grid()},
+//       {&low_resolution_point_cloud_in_tracking,
+//        &matching_submap->low_resolution_hybrid_grid()}},
+//      &pose_observation_in_submap, &summary);
+  ceres_scan_matcher_->MatchWithFreeSpace(
       matching_submap->local_pose().inverse() * pose_prediction,
       initial_ceres_pose,
       {{&filtered_point_cloud_in_tracking,
         &matching_submap->high_resolution_hybrid_grid()},
        {&low_resolution_point_cloud_in_tracking,
         &matching_submap->low_resolution_hybrid_grid()}},
+        {decay_grid_high, decay_grid_low},
       &pose_observation_in_submap, &summary);
   pose_estimate_ = matching_submap->local_pose() * pose_observation_in_submap;
 
@@ -284,7 +302,7 @@ LocalTrajectoryBuilder::InsertIntoSubmap(
   active_submaps_.InsertRangeData(
       sensor::TransformRangeData(range_data_in_tracking,
                                  pose_observation.cast<float>()),
-      imu_tracker_->orientation());
+      imu_tracker_->orientation(), true);
   return std::unique_ptr<InsertionResult>(
       new InsertionResult{time, range_data_in_tracking, pose_observation,
                           std::move(insertion_submaps)});

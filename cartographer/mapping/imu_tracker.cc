@@ -67,6 +67,7 @@ void ImuTracker::AddImuLinearAccelerationObservation(
 
   // Change the 'orientation_' so that it agrees with the current
   // 'gravity_vector_'.
+
   const Eigen::Quaterniond rotation = Eigen::Quaterniond::FromTwoVectors(
       gravity_vector_, orientation_.inverse() * Eigen::Vector3d::UnitZ());
   orientation_ = (orientation_ * rotation).normalized();

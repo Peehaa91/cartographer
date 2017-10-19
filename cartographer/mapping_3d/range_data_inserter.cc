@@ -122,13 +122,14 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
     std::vector<Eigen::Array3i> line;
     Eigen::Array3i hit_cell = hybrid_decay_grid->GetCellIndex(hit);
     hybrid_decay_grid->increaseHitCount(hit_cell);
+    hybrid_decay_grid->increaseViewCount(hit_cell);
     //double distance = 0.5;
     //LOG(INFO)<<"hit count: "<<std::get<1>(*(hybrid_grid->mutable_value(hit_cell)));
     Eigen::Array3i direction = origin - hit_cell;
     Eigen::Vector3f slope(direction[0], direction[1], direction[2]);
-    double distance = 0.5*calculateRayLengthInVoxel(slope, origin, hit_cell);
-//    LOG(INFO)<<"hit dist:"<<distance;
+    double distance = 0.5*calculateRayLengthInVoxel(slope, origin, hit_cell) * hybrid_grid->resolution() ;
     hybrid_decay_grid->increaseRayAccumulation(hit_cell, distance);
+
 //    LOG(INFO) << "hit: " << hit_cell << std::endl
 //              << " origin: " << origin << std::endl
 //              << " direction: " << direction;
@@ -194,7 +195,8 @@ void RangeDataInserter::RayTracingInsert(const sensor::RangeData& range_data,
       // "<<current_key(1)
       //    <<std::endl<<" cell_z: "<<current_key(2);
       line.insert(line.begin(), current_key);
-      double dist = calculateRayLengthInVoxel(slope, origin, current_key);
+      double dist = calculateRayLengthInVoxel(slope, origin, current_key) * hybrid_grid->resolution();
+      hybrid_decay_grid->increaseViewCount(current_key);
 //      LOG(INFO)<<current_key;
 //      LOG(INFO)<<"dist: "<<dist;
       if ((current_key(0) == origin(0) && current_key(1) == origin(1) &&
@@ -332,7 +334,7 @@ void RangeDataInserter::updateProbabilities(const std::vector<std::vector<Eigen:
 //        hybrid_decay_grid->ApplyLookupTable(*it, miss_table_);
         dist = 1;
       }
-      std::tuple<uint16, uint16, double>* values = hybrid_decay_grid->mutable_value(*it);
+      std::tuple<uint16, uint16, double, uint16>* values = hybrid_decay_grid->mutable_value(*it);
 //      LOG(INFO)<<"val before: "<<std::get<0>(*values);
       double lambda = std::get<1>(*values)/std::get<2>(*values);
       prob = lambda * prob_multiplicator * exp(-lambda * dist);

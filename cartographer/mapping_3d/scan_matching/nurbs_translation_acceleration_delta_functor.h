@@ -40,6 +40,11 @@ class NurbsTranslationAccelerationDeltaFunctor {
   NurbsTranslationAccelerationDeltaFunctor(const NurbsTranslationAccelerationDeltaFunctor&) = delete;
   NurbsTranslationAccelerationDeltaFunctor& operator=(const NurbsTranslationAccelerationDeltaFunctor&) = delete;
 
+  template<typename T>
+  double getScalar(const T& jet) const {
+    return ceres::Jet<double, 35>(jet).a;
+  }
+
   template <typename T>
   bool operator()(const T* const point_1_trans, const T* const point_1_rotation,
                   const T* const point_2_trans, const T* const point_2_rotation,
@@ -102,19 +107,19 @@ class NurbsTranslationAccelerationDeltaFunctor {
     boost::multi_array<std::array<T, output_dim>, input_dim> points_second_deriv(
         boost::extents[vec_trans.size() -2]);
     for (int i = 0; i < vec_trans.size() -2; ++i) {
-      points_second_deriv[i][0] = T(degree)/(knot_first_vec[0][i + degree + 1] - knot_first_vec[0][i + 1])
+      points_second_deriv[i][0] = T(degree -1)/(knot_first_vec[0][i + degree -1 + 1] - knot_first_vec[0][i + 1])
           * (points_first_deriv[i + 1][0] - points_first_deriv[i][0]);
-      points_second_deriv[i][1] = T(degree)/(knot_first_vec[0][i + degree + 1] - knot_first_vec[0][i + 1])
+      points_second_deriv[i][1] = T(degree -1)/(knot_first_vec[0][i + degree -1 + 1] - knot_first_vec[0][i + 1])
           * (points_first_deriv[i + 1][1] - points_first_deriv[i][1]);
-      points_second_deriv[i][2] = T(degree)/(knot_first_vec[0][i + degree + 1] - knot_first_vec[0][i + 1])
+      points_second_deriv[i][2] = T(degree -1)/(knot_first_vec[0][i + degree -1 + 1] - knot_first_vec[0][i + 1])
           * (points_first_deriv[i + 1][2] - points_first_deriv[i][2]);
-      points_second_deriv[i][3] = T(degree)/(knot_first_vec[0][i + degree + 1] - knot_first_vec[0][i + 1])
+      points_second_deriv[i][3] = T(degree -1)/(knot_first_vec[0][i + degree -1 + 1] - knot_first_vec[0][i + 1])
           * (points_first_deriv[i + 1][3] - points_first_deriv[i][3]);
-      points_second_deriv[i][4] = T(degree)/(knot_first_vec[0][i + degree + 1] - knot_first_vec[0][i + 1])
+      points_second_deriv[i][4] = T(degree -1)/(knot_first_vec[0][i + degree -1 + 1] - knot_first_vec[0][i + 1])
           * (points_first_deriv[i + 1][4] - points_first_deriv[i][4]);
-      points_second_deriv[i][5] = T(degree)/(knot_first_vec[0][i + degree + 1] - knot_first_vec[0][i + 1])
+      points_second_deriv[i][5] = T(degree -1)/(knot_first_vec[0][i + degree -1 + 1] - knot_first_vec[0][i + 1])
           * (points_first_deriv[i + 1][5] - points_first_deriv[i][5]);
-      points_second_deriv[i][6] = T(degree)/(knot_first_vec[0][i + degree + 1] - knot_first_vec[0][i + 1])
+      points_second_deriv[i][6] = T(degree -1)/(knot_first_vec[0][i + degree -1 + 1] - knot_first_vec[0][i + 1])
           * (points_first_deriv[i + 1][6] - points_first_deriv[i][6]);
     }
 
@@ -122,27 +127,31 @@ class NurbsTranslationAccelerationDeltaFunctor {
     knots_second_deriv.create(degree - 2, points_second_deriv.shape());
     nurbs_second_deriv.init(degree - 2, knots_second_deriv, weights_second_deriv, points_second_deriv);
     int numSamplePoints = initial_linear_acceleration_.size();
-      int counter = 0 ;
-      for (int i = 0; i < numSamplePoints; ++i) {
-        double point = ((common::ToSeconds(initial_linear_acceleration_[i].first - begin_)
-                  / common::ToSeconds(end_ - begin_)));
-        std::array<T, output_dim> output_second_deriv;
-        std::array<T, output_dim> output;
-        nurbs_second_deriv.getPoint(&point, output_second_deriv.begin());
-        nurbs.getPoint(&point, output.begin());
-        Eigen::Quaternion<T>rotation(output[6], output[3], output[4], output[5]);
-        Eigen::Matrix<T, 3, 1> lin_acc(output_second_deriv[0], output_second_deriv[1], output_second_deriv[2]);
-        Eigen::Matrix<T, 3, 1> gravity(T(0), T(0), T(9.81));
-        Eigen::Matrix<T, 3, 1> gravity_rotated = rotation * gravity;
-        Eigen::Matrix<T, 3, 1> inital_acceleration = initial_linear_acceleration_[i].second.cast<T>() - gravity_rotated;
+    int counter = 0 ;
+    for (int i = 0; i < numSamplePoints; ++i) {
+      double point = ((common::ToSeconds(initial_linear_acceleration_[i].first - begin_)
+                / common::ToSeconds(end_ - begin_)));
+      std::array<T, output_dim> output_second_deriv;
+      std::array<T, output_dim> output;
+      nurbs_second_deriv.getPoint(&point, output_second_deriv.begin());
+      nurbs.getPoint(&point, output.begin());
+      Eigen::Quaternion<T>rotation(output[6], output[3], output[4], output[5]);
+      Eigen::Matrix<T, 3, 1> lin_acc(output_second_deriv[0], output_second_deriv[1], output_second_deriv[2]);
+      Eigen::Matrix<T, 3, 1> gravity(T(0), T(0), T(9.81));
+      Eigen::Matrix<T, 3, 1> gravity_rotated = rotation.inverse() * gravity;
+      Eigen::Matrix<T, 3, 1> inital_acceleration = initial_linear_acceleration_[i].second.cast<T>() - gravity_rotated;
 
-        residual[counter] = scaling_factor_ * (inital_acceleration[0] - lin_acc[0]);
-        counter++;
-        residual[counter] = scaling_factor_ * (inital_acceleration[1] - lin_acc[1]);
-        counter++;
-        residual[counter] = scaling_factor_ * (inital_acceleration[2] - lin_acc[2]);
-        counter++;
-      }
+//      LOG(INFO)<<"output x:"<<getScalar(lin_acc[0])<<"init x: "<<getScalar(inital_acceleration[0]);
+//      LOG(INFO)<<"output y:"<<getScalar(lin_acc[1])<<"init y: "<<getScalar(inital_acceleration[1]);
+//      LOG(INFO)<<"output z:"<<getScalar(lin_acc[2])<<"init z: "<<getScalar(inital_acceleration[2]);
+
+      residual[counter] = scaling_factor_ * (inital_acceleration[0] - lin_acc[0]);
+      counter++;
+      residual[counter] = scaling_factor_ * (inital_acceleration[1] - lin_acc[1]);
+      counter++;
+      residual[counter] = scaling_factor_ * (inital_acceleration[2] - lin_acc[2]);
+      counter++;
+    }
     return true;
   }
 

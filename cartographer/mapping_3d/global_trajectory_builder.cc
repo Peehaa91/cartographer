@@ -37,18 +37,37 @@ void GlobalTrajectoryBuilder::AddImuData(
                                  angular_velocity);
 }
 
+
+/*Selects which local Trajectory Interface should be used*/
 void GlobalTrajectoryBuilder::AddRangefinderData(
     const common::Time time, const Eigen::Vector3f& origin,
     const sensor::PointCloud& ranges) {
-  auto insertion_result =
+
+  /*Continuous Local Trajectory Builder Result*/
+  std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> insertion_result =
       local_trajectory_builder_.AddRangefinderData(time, origin, ranges);
-  if (insertion_result == nullptr) {
+  if (insertion_result.size() == 0) {
     return;
   }
-  sparse_pose_graph_->AddScan(
-      insertion_result->time, insertion_result->range_data_in_tracking,
-      insertion_result->pose_observation, trajectory_id_,
-      std::move(insertion_result->insertion_submaps));
+  for (auto& result : insertion_result)
+  {
+//    LOG(INFO)<<"new result: "<<"time: "<<result->time<<" pose: "<<result->pose_observation
+//        <<" range data size: "<<result->range_data_in_tracking.returns.size();
+    sparse_pose_graph_->AddScan(
+        result->time, result->range_data_in_tracking,
+        result->pose_observation, trajectory_id_,
+        std::move(result->insertion_submaps));
+  }
+  /*Local Trajectory Builder Result*/
+//  auto insertion_result =
+//      local_trajectory_builder_.AddRangefinderData(time, origin, ranges);
+//  if (insertion_result == nullptr) {
+//    return;
+//  }
+//  sparse_pose_graph_->AddScan(
+//      insertion_result->time, insertion_result->range_data_in_tracking,
+//      insertion_result->pose_observation, trajectory_id_,
+//      std::move(insertion_result->insertion_submaps));
 }
 
 void GlobalTrajectoryBuilder::AddOdometerData(const common::Time time,

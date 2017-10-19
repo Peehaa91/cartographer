@@ -68,23 +68,31 @@ class CeresScanMatcher {
              Nurbs<double, 1, 7, KnotType::UNIFORM, WeightType::RATIONAL>* nurbs_estimate,
              ceres::Solver::Summary* summary);
 
-  void Match(const HybridGrid* hybrid_grid,
-             const HybridDecayGrid* decay_grid,
-             const common::Time& begin,
-             const common::Time& end,
-             const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
-             std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_angular_vel_data_vector,
-             std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
-             std::vector<transform::Rigid3d>& control_points,
-             std::vector<double>& weight_vec,
-             ceres::Solver::Summary* summary);
+  void MatchSplineWithFreeSpace(const std::vector<const HybridGrid*>& hybrid_grid,
+                                const std::vector<const HybridDecayGrid*>& decay_grid,
+                                const common::Time& begin,
+                                const common::Time& end,
+                                const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec,
+                                std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_angular_vel_data_vector,
+                                std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
+                                std::vector<transform::Rigid3d>& control_points,
+                                std::vector<double>& weight_vec,
+                                ceres::Solver::Summary* summary);
+
+  void MatchWithFreeSpace(const transform::Rigid3d& previous_pose,
+                               const transform::Rigid3d& initial_pose_estimate,
+                               const std::vector<PointCloudAndHybridGridPointers>&
+                                   point_clouds_and_hybrid_grids,
+                                   std::vector<const HybridDecayGrid*> decay_grid,
+                               transform::Rigid3d* pose_estimate,
+                               ceres::Solver::Summary* summary);
 
  private:
   void freeSpaceEstimator(std::vector<CeresPose>& ceres_pose_control_points,
                           ceres::Problem& problem,
                           const int& number_of_residuals,
-                          const HybridGrid* hybrid_grid,
-                          const HybridDecayGrid* decay_grid,
+                          const std::vector<const HybridGrid*>& hybrid_grid,
+                          const std::vector<const HybridDecayGrid*>& decay_grid,
                           const common::Time& begin,
                           const common::Time& end,
                           const std::vector<std::pair<common::Time, sensor::RangeData>>& range_data_vec);
