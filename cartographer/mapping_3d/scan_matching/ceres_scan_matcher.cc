@@ -373,6 +373,7 @@ void CeresScanMatcher::MatchSplineWithFreeSpace(const std::vector<const HybridGr
   for (int i = 0; i < control_points.size(); i++){
     if (options_.only_optimize_yaw())
     {
+      LOG(INFO)<<"only yaw";
       ceres_pose_control_points.push_back(CeresPose(
           control_points[i], nullptr /* translation_parameterization */,
           nullptr,
@@ -389,6 +390,9 @@ void CeresScanMatcher::MatchSplineWithFreeSpace(const std::vector<const HybridGr
           control_points[i], nullptr /* translation_parameterization */,
           nullptr,
           &problem));
+      std::unique_ptr<ceres::LocalParameterization> para=
+                      common::make_unique<ceres::QuaternionParameterization>();
+      problem.AddParameterBlock(ceres_pose_control_points[i].rotation(),4,para.release());
       LOG(INFO)<<"knot "<<i<<" before: "<<ceres_pose_control_points[i].ToRigid();
     }
   }
@@ -447,6 +451,20 @@ void CeresScanMatcher::MatchSplineWithFreeSpace(const std::vector<const HybridGr
 //          , ceres_pose_control_points[3].translation(), ceres_pose_control_points[3].rotation()
 //          , ceres_pose_control_points[4].translation(), ceres_pose_control_points[4].rotation());
 
+  problem.AddResidualBlock(
+          new ceres:: AutoDiffCostFunction<NurbsRotationVelocityDeltaFunctor,
+          ceres::DYNAMIC, 3,4,3,4,3,4,3,4,3,4>(
+              new NurbsRotationVelocityDeltaFunctor(
+                  5.0/std::sqrt(static_cast<double>(imu_angular_vel_data_vector.size())),//0.17/std::sqrt(static_cast<double>(3 * linear_acc_data_vector.size())),
+                  imu_angular_vel_data_vector,
+                  begin,
+                  end),
+                  3 * imu_angular_vel_data_vector.size()),
+          nullptr, ceres_pose_control_points[0].translation(), ceres_pose_control_points[0].rotation()
+          , ceres_pose_control_points[1].translation(), ceres_pose_control_points[1].rotation()
+          , ceres_pose_control_points[2].translation(), ceres_pose_control_points[2].rotation()
+          , ceres_pose_control_points[3].translation(), ceres_pose_control_points[3].rotation()
+          , ceres_pose_control_points[4].translation(), ceres_pose_control_points[4].rotation());
   /*new Scan Matcher */
 //  freeSpaceEstimator(ceres_pose_control_points,
 //                     problem,

@@ -61,13 +61,15 @@ class LocalPoseGraph {
   void createDerivativeSplines(std::vector<PoseEstimate>& control_point_vec,
                                 std::vector<PoseAndRangeData> & range_data_vec,
                                 std::vector<std::pair<common::Time, transform::Rigid3d>>& velocity_data,
+                                std::vector<std::pair<common::Time, Eigen::Vector3d>>& angular_vel_data,
                                 std::vector<std::pair<common::Time, transform::Rigid3d>>& acceleration_data,
                                 std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
                                 std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_res_vec);
   void writeSplineInFile(std::vector<PoseEstimate>& control_point_vec,
                          std::vector<PoseAndRangeData> & range_data_vec,
                          std::string file_name,
-                         std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector);
+                         std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
+                         std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_angular_vel_data_vector);
   /*B Spline Parameters*/
   unsigned int input_size_;
   unsigned int output_size_;

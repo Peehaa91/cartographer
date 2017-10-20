@@ -79,12 +79,16 @@ class NurbsRotationVelocityDeltaFunctor {
             point_3_trans, point_4_trans, point_5_trans};
     std::vector<const T*> vec_rot = {point_1_rotation, point_2_rotation,
         point_3_rotation, point_4_rotation, point_5_rotation};
+    Nurbs<T, input_dim, output_dim, knot_type, weight_type> nurbs = Nurbs<
+          T, input_dim, output_dim, knot_type, weight_type>();
     Nurbs<T, input_dim, output_dim, knot_type, weight_type> nurbs_deriv = Nurbs<
           T, input_dim, output_dim, knot_type, weight_type>();
     NurbsKnots<T, input_dim, output_dim, knot_type> knots = NurbsKnots<
         T, input_dim, output_dim, knot_type>();
     NurbsKnots<T, input_dim, output_dim, knot_type> knots_deriv = NurbsKnots<
         T, input_dim, output_dim, knot_type>();
+    NurbsWeights<T, input_dim, output_dim, weight_type> weights =
+        NurbsWeights<T, input_dim, output_dim, weight_type>();
     NurbsWeights<T, input_dim, output_dim, weight_type> weights_deriv =
         NurbsWeights<T, input_dim, output_dim, weight_type>();
     boost::multi_array<std::array<T, output_dim>, input_dim> points( boost::extents[vec_trans.size()]);
@@ -98,6 +102,8 @@ class NurbsRotationVelocityDeltaFunctor {
       points[i][6] = vec_rot[i][0];
     }
     knots.create(degree, points.shape());
+    weights.create(points.shape());
+    nurbs.init(degree, knots, weights, points);
 
     std::array<std::vector<T>, input_dim> knot_vec = knots.getKnot();
 
@@ -122,15 +128,27 @@ class NurbsRotationVelocityDeltaFunctor {
         double point = ((common::ToSeconds(initial_angular_vel_[i].first - begin_)
                   / common::ToSeconds(end_ - begin_)));
         std::array<T, output_dim> output;
+        std::array<T, output_dim> output_nurb;
         nurbs_deriv.getPoint(&point, output.begin());
+        nurbs.getPoint(&point, output_nurb.begin());
 //        T delta[4];
 //        T initial_rotation_inverse[4] = {
 //            T(initial_angular_vel_[i].second.w()), T(initial_angular_vel_[i].second.x()),
 //            T(initial_angular_vel_[i].second.y()), T(initial_angular_vel_[i].second.z())};
+        Eigen::Quaternion<T> orientation_inverse(
+            output_nurb[6], -output_nurb[3],
+            -output_nurb[4], -output_nurb[5]);
         Eigen::Quaternion<T> rotation_vel(
                     output[6], output[3],
                     output[4], output[5]);
-        Eigen::Matrix<T, 3, 1> angular_vel = rotation_vel.toRotationMatrix().eulerAngles(0, 1, 2);
+        Eigen::Quaternion<T> angular_vel = rotation_vel * orientation_inverse;
+        angular_vel = Eigen::Quaternion<T>(T(2.0)* angular_vel.w(),
+                                           T(2.0)* angular_vel.x(),
+                                           T(2.0)* angular_vel.y(),
+                                           T(2.0)* angular_vel.z());
+//        Eigen::Matrix<T,3,1> velocity = angular_vel.toRotationMatrix().eulerAngles(0, 1, 2);
+//        LOG(INFO)<<"w_vel:"<<getScalar(angular_vel.w())<<"x_vel:"<<getScalar(angular_vel.x())<<"y_vel:"<<getScalar(angular_vel.y())<<"z_vel:"<<
+//            getScalar(angular_vel.z());
 //        ceres::QuaternionProduct(initial_rotation_inverse, rotation_vel,
 //                                 delta);
 
@@ -144,17 +162,23 @@ class NurbsRotationVelocityDeltaFunctor {
 //        LOG(INFO)<<"diff x:"<<getScalar(getVelocityDiff(angular_vel[0], initial_angular_vel_[i].second[0]));
 //        LOG(INFO)<<"diff y:"<<getScalar(getVelocityDiff(angular_vel[1], initial_angular_vel_[i].second[1]));
 //        LOG(INFO)<<"diff z:"<<getScalar(getVelocityDiff(angular_vel[2], initial_angular_vel_[i].second[2]));
-        residual[counter] = scaling_factor_ * getVelocityDiff(angular_vel[0], initial_angular_vel_[i].second[0]) ;
+        residual[counter] = scaling_factor_ * (angular_vel.x() - initial_angular_vel_[i].second[0]) ;
         counter++;
-        residual[counter] = scaling_factor_ * getVelocityDiff(angular_vel[1], initial_angular_vel_[i].second[1]);
+        residual[counter] = scaling_factor_ * (angular_vel.y() - initial_angular_vel_[i].second[1]);
         counter++;
-        residual[counter] = scaling_factor_ * getVelocityDiff(angular_vel[2], initial_angular_vel_[i].second[2]);
+        residual[counter] = scaling_factor_ * (angular_vel.z() - initial_angular_vel_[i].second[2]);
         counter++;
 //        residual[counter] = scaling_factor_ * (angles[0] - T(initial_rotation_vel_inverse_[i].second[0]));
 //        counter++;
 //        residual[counter] = scaling_factor_ * (angles[1] - T(initial_rotation_vel_inverse_[i].second[1]));;
 //        counter++;
 //        residual[counter] = scaling_factor_ * (angles[2] - T(initial_rotation_vel_inverse_[i].second[2]));;
+//        counter++;
+//        residual[counter] = T(0);
+//        counter++;
+//        residual[counter] = T(0);
+//        counter++;
+//        residual[counter] = T(0);
 //        counter++;
       }
     return true;

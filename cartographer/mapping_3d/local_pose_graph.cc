@@ -165,7 +165,7 @@ std::vector<PoseAndRangeData> LocalPoseGraph::createSplineFromControlVector(
   createPoseAndScanFromSpline(control_points,
                               range_data_vec,
                               pose_and_cloud_vec);
-  writeSplineInFile(control_points ,pose_and_cloud_vec, std::to_string(nurbs_number), linear_acc_data_vector);
+  writeSplineInFile(control_points ,pose_and_cloud_vec, std::to_string(nurbs_number), linear_acc_data_vector, imu_angular_vel_data_vector);
   control_point_vec = control_points;
   nurbs_number++;
   return pose_and_cloud_vec;
@@ -174,6 +174,7 @@ std::vector<PoseAndRangeData> LocalPoseGraph::createSplineFromControlVector(
 void LocalPoseGraph::createDerivativeSplines(std::vector<PoseEstimate>& control_point_vec,
                                              std::vector<PoseAndRangeData> & range_data_vec,
                                              std::vector<std::pair<common::Time, transform::Rigid3d>>& velocity_data,
+                                             std::vector<std::pair<common::Time, Eigen::Vector3d>>& angular_vel_data,
                                              std::vector<std::pair<common::Time, transform::Rigid3d>>& acceleration_data,
                                              std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
                                              std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_res_vec)
@@ -236,9 +237,20 @@ void LocalPoseGraph::createDerivativeSplines(std::vector<PoseEstimate>& control_
             / common::ToSeconds(end - begin);
         std::array<double, output_dim> output;
         nurbs_first_deriv.getPoint(&point, output.begin());
+        std::array<double, output_dim> output_nurbs;
+        nurbs.getPoint(&point, output_nurbs.begin());
+        Eigen::Quaterniond orientation_inverse(
+            output_nurbs[6], -output_nurbs[3],
+            -output_nurbs[4], -output_nurbs[5]);
+        Eigen::Quaterniond rotation_vel(
+                           output[6], output[3],
+                           output[4], output[5]);
+        Eigen::Quaterniond angular_vel_quat = rotation_vel * orientation_inverse;
+        Eigen::Vector3d angular_vel = 2.0 * angular_vel_quat.vec();
         transform::Rigid3d pose = transform::Rigid3d(
             Eigen::Vector3d(output[0], output[1], output[2]),
             Eigen::Quaterniond(output[6], output[3], output[4], output[5]));
+        angular_vel_data.push_back(std::make_pair(range_data_vec[i].time, angular_vel));
         velocity_data.push_back(std::make_pair(range_data_vec[i].time, pose));
       }
 
@@ -298,14 +310,17 @@ void LocalPoseGraph::createDerivativeSplines(std::vector<PoseEstimate>& control_
 void LocalPoseGraph::writeSplineInFile(std::vector<PoseEstimate>& control_point_vec,
                                        std::vector<PoseAndRangeData> & range_data_vec,
                                        std::string file_name,
-                                       std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector)
+                                       std::vector<std::pair<common::Time, Eigen::Vector3d>>& linear_acc_data_vector,
+                                       std::vector<std::pair<common::Time, Eigen::Vector3d>>& imu_angular_vel_data_vector)
 {
   std::vector<std::pair<common::Time, transform::Rigid3d>> velocity_data;
   std::vector<std::pair<common::Time, transform::Rigid3d>> acceleration_data;
+  std::vector<std::pair<common::Time, Eigen::Vector3d>> angular_vel_data;
   std::vector<std::pair<common::Time, Eigen::Vector3d>> imu_res_vec;
   createDerivativeSplines(control_point_vec,
                            range_data_vec,
                            velocity_data,
+                           angular_vel_data,
                            acceleration_data,
                            linear_acc_data_vector,
                            imu_res_vec);
@@ -330,6 +345,8 @@ void LocalPoseGraph::writeSplineInFile(std::vector<PoseEstimate>& control_point_
     nurbs_file<<"time: "<<pose_and_range.time<<" "<<pose_and_range.pose<<std::endl;
   }
   nurbs_file.close();
+
+  /*translation from spline*/
   file_path = std::string(path) + std::string("/") + file_name + std::string("_trans.txt");
   std::ofstream nurbs_trans_file(file_path.c_str());
   for (PoseAndRangeData pose_and_range : range_data_vec)
@@ -340,6 +357,7 @@ void LocalPoseGraph::writeSplineInFile(std::vector<PoseEstimate>& control_point_
   }
   nurbs_trans_file.close();
 
+  /*linear velocity from spline*/
   file_path = std::string(path) + std::string("/") + file_name + std::string("_vel.txt");
   std::ofstream nurbs_vel_file(file_path.c_str());
   for (std::pair<common::Time, transform::Rigid3d> vel_data : velocity_data)
@@ -350,6 +368,29 @@ void LocalPoseGraph::writeSplineInFile(std::vector<PoseEstimate>& control_point_
   }
   nurbs_vel_file.close();
 
+  /*angular velocity from spline*/
+  file_path = std::string(path) + std::string("/") + file_name + std::string("_ang_vel.txt");
+  std::ofstream nurbs_ang_vel_file(file_path.c_str());
+  for (std::pair<common::Time, Eigen::Vector3d> vel_data : angular_vel_data)
+  {
+    nurbs_ang_vel_file<<"time: "<< common::ToSeconds(vel_data.first- control_point_vec[0].time)<<" x: "<<vel_data.second.x()
+    <<" y: "<<vel_data.second.y()
+    <<" z: "<<vel_data.second.z()<<std::endl;
+  }
+  nurbs_ang_vel_file.close();
+
+  /*angular velocity from imu from spline*/
+  file_path = std::string(path) + std::string("/") + file_name + std::string("_ang_vel_imu.txt");
+  std::ofstream nurbs_ang_vel_imu_file(file_path.c_str());
+  for (std::pair<common::Time, Eigen::Vector3d> vel_data : imu_angular_vel_data_vector)
+  {
+    nurbs_ang_vel_imu_file<<"time: "<< common::ToSeconds(vel_data.first- control_point_vec[0].time)<<" x: "<<vel_data.second.x()
+    <<" y: "<<vel_data.second.y()
+    <<" z: "<<vel_data.second.z()<<std::endl;
+  }
+  nurbs_ang_vel_imu_file.close();
+
+  /*acceleration from spline*/
   file_path = std::string(path) + std::string("/") + file_name + std::string("_acc.txt");
   std::ofstream nurbs_acc_file(file_path.c_str());
   for (std::pair<common::Time, transform::Rigid3d> acc_data : acceleration_data)
@@ -360,6 +401,7 @@ void LocalPoseGraph::writeSplineInFile(std::vector<PoseEstimate>& control_point_
   }
   nurbs_acc_file.close();
 
+  /*imu acceleration data raw*/
   file_path = std::string(path) + std::string("/") + file_name + std::string("_acc_imu.txt");
   std::ofstream nurbs_acc_imu_file(file_path.c_str());
   for (std::pair<common::Time, Eigen::Vector3d> acc_data : linear_acc_data_vector)
@@ -369,6 +411,8 @@ void LocalPoseGraph::writeSplineInFile(std::vector<PoseEstimate>& control_point_
     <<" z: "<<acc_data.second.z()<<std::endl;
   }
   nurbs_acc_imu_file.close();
+
+  /*resulting imu data after g vec subtraction*/
   file_path = std::string(path) + std::string("/") + file_name + std::string("res_acc_imu.txt");
   std::ofstream nurbs_res_acc_imu_file(file_path.c_str());
   for (std::pair<common::Time, Eigen::Vector3d> acc_data : imu_res_vec)

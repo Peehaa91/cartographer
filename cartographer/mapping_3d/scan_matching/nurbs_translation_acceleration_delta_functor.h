@@ -35,6 +35,11 @@ class NurbsTranslationAccelerationDeltaFunctor {
         initial_linear_acceleration_(initial_linear_acceleration),
         begin_(begin),
         end_(end){
+    for (auto& acc : initial_linear_acceleration_){
+      acc.second = Eigen::Vector3d(acc.second.x(),
+                                   acc.second.y(),
+                                   acc.second.z());
+    }
   }
 
   NurbsTranslationAccelerationDeltaFunctor(const NurbsTranslationAccelerationDeltaFunctor&) = delete;
@@ -147,9 +152,9 @@ class NurbsTranslationAccelerationDeltaFunctor {
 
       residual[counter] = scaling_factor_ * (inital_acceleration[0] - lin_acc[0]);
       counter++;
-      residual[counter] = scaling_factor_ * (inital_acceleration[1] - lin_acc[1]);
+      residual[counter] = scaling_factor_ * (inital_acceleration[1] + lin_acc[1]);
       counter++;
-      residual[counter] = scaling_factor_ * (inital_acceleration[2] - lin_acc[2]);
+      residual[counter] = scaling_factor_ * (inital_acceleration[2] + lin_acc[2]);
       counter++;
     }
     return true;

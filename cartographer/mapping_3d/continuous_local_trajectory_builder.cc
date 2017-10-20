@@ -194,6 +194,8 @@ std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> Continuous
         + control_point_vel_[pose_vec_.size()] * common::ToSeconds(time - last_pose_vec_[pose_vec_.size()].time);
 //    LOG(INFO)<<pose_vec_.size();
     transform::Rigid3d new_pose = transform::Rigid3d(translation, pose_estimate_.rotation());
+//    transform::Rigid3d new_pose = transform::Rigid3d(last_pose_vec_[last_pose_vec_.size() -1].pose.translation(),
+//                                                     pose_estimate_.rotation());
 //    transform::Rigid3d new_pose = pose_estimate_;
 //    transform::Rigid3d new_pose = transform::Rigid3d(pose_estimate_.translation(),last_pose_vec_[pose_vec_.size()].pose.rotation());
     control_point = {time, matching_submap->local_pose().inverse()*new_pose, {}};
@@ -245,8 +247,8 @@ std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> Continuous
     for (std::shared_ptr<Submap> submap : active_submaps_.submaps()) {
       insertion_submaps.push_back(submap);
     }
-    active_submaps_.InsertRangeData(
-        complete_scan,
+    active_submaps_.InsertRangeData(sensor::TransformRangeData(
+        complete_scan, pose_estimate_.cast<float>()),
         pose_estimate_.rotation(),
         true);
     std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> result;
