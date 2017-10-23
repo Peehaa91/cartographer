@@ -118,7 +118,15 @@ std::vector<PoseAndRangeData> LocalPoseGraph::createSplineFromControlVector(
     control_points_pose_vec.push_back(control_point_vec[i].pose);
 
   }
-
+  const double delta_t = common::ToSeconds(control_point_vec[1].time -
+                                           control_point_vec[0].time);
+  const Eigen::Quaterniond rotation =
+      transform::AngleAxisVectorToRotationQuaternion(
+          Eigen::Vector3d(last_ang_vel_ * delta_t));
+  Eigen::Quaterniond rot = control_points_pose_vec[1].rotation();
+  rot = (rot * rotation).normalized();
+  Eigen::Vector3d trans = control_points_pose_vec[1].translation() + last_lin_vel_*delta_t;
+  control_points_pose_vec[1] =transform::Rigid3d(trans, rot);
 
   common::Time begin = control_point_vec.front().time;
   common::Time end = control_point_vec.back().time;
@@ -252,6 +260,8 @@ void LocalPoseGraph::createDerivativeSplines(std::vector<PoseEstimate>& control_
             Eigen::Quaterniond(output[6], output[3], output[4], output[5]));
         angular_vel_data.push_back(std::make_pair(range_data_vec[i].time, angular_vel));
         velocity_data.push_back(std::make_pair(range_data_vec[i].time, pose));
+        last_lin_vel_ = pose.translation();
+        last_ang_vel_ = angular_vel;
       }
 
 

@@ -75,6 +75,8 @@ class LocalPoseGraph {
   unsigned int output_size_;
   KnotType knot_type_;
   WeightType weight_type_;
+  Eigen::Vector3d last_lin_vel_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d last_ang_vel_ = Eigen::Vector3d::Zero();
 //  Nurbs<double, input_size_, output_size_, knot_type_, weight_type_> nurbs_;
 
 };
