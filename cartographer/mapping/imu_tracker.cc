@@ -33,9 +33,19 @@ ImuTracker::ImuTracker(const double imu_gravity_time_constant,
       last_linear_acceleration_time_(common::Time::min()),
       orientation_(Eigen::Quaterniond::Identity()),
       gravity_vector_(Eigen::Vector3d::UnitZ()),
-      linear_acceleration_(Eigen::Vector3d(0,0, 9.81)),
+      linear_acceleration_correction_(Eigen::Vector3d(0, 0 , 0)),
       first_gravity_(Eigen::Vector3d(0,0, 9.81)),
-      imu_angular_velocity_(Eigen::Vector3d::Zero()) {}
+      imu_angular_velocity_(Eigen::Vector3d::Zero()) {
+
+//    double roll = (M_PI- 3.00584)/2.0;
+//    double pitch = (M_PI - 3.12515)/2.0;
+//    double yaw = (M_PI - -3.12515)/2.0;
+//  orientation_ = Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())
+//  * Eigen::AngleAxisd(pitch,  Eigen::Vector3d::UnitY())
+//  * Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ());
+//////  orientation_ = orientation_.inverse();
+//  gravity_vector_ = orientation_.inverse() * first_gravity_;
+}
 
 void ImuTracker::Advance(const common::Time time) {
   CHECK_LE(time_, time);
@@ -53,16 +63,22 @@ void ImuTracker::AddImuLinearAccelerationObservation(
     const Eigen::Vector3d& imu_linear_acceleration) {
   // Update the 'gravity_vector_' with an exponential moving average using the
   // 'imu_gravity_time_constant'.
+//  if ( last_linear_acceleration_time_ > common::Time::min())
+//  {
   const double delta_t =
       last_linear_acceleration_time_ > common::Time::min()
           ? common::ToSeconds(time_ - last_linear_acceleration_time_)
           : std::numeric_limits<double>::infinity();
-  if (delta_t < std::numeric_limits<double>::infinity())
-    linear_acceleration_ = imu_linear_acceleration - gravity_vector_;
+//  if (delta_t < std::numeric_limits<double>::infinity())
+//    linear_acceleration_ = imu_linear_acceleration - gravity_vector_;
   last_linear_acceleration_time_ = time_;
   const double alpha = 1. - std::exp(-delta_t / imu_gravity_time_constant_);
   gravity_vector_ =
       (1. - alpha) * gravity_vector_ + alpha * imu_linear_acceleration;
+//  }
+//  else
+//    last_linear_acceleration_time_ = time_;
+
 
 
   // Change the 'orientation_' so that it agrees with the current
@@ -70,6 +86,7 @@ void ImuTracker::AddImuLinearAccelerationObservation(
 
   const Eigen::Quaterniond rotation = Eigen::Quaterniond::FromTwoVectors(
       gravity_vector_, orientation_.inverse() * Eigen::Vector3d::UnitZ());
+//  linear_acceleration_correction_ = alpha * imu_linear_acceleration;
   orientation_ = (orientation_ * rotation).normalized();
 //  if (delta_t == std::numeric_limits<double>::infinity()){
 //    first_gravity_ = Eigen::Vector3d(0, 0, 9.81);

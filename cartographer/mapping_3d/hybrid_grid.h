@@ -643,7 +643,7 @@ class HybridGrid : public HybridGridBase<uint16> {
       return false;
     }
     update_indices_.push_back(cell);
-    *cell = table[*cell] - mapping::kUpdateMarker;
+    *cell = table[*cell];
 //    LOG(INFO)<<"prob look :"<<mapping::ValueToProbability(*cell -mapping::kUpdateMarker);
     DCHECK_GE(*cell, mapping::kUpdateMarker);
     return true;

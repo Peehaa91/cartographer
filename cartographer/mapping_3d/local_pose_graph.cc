@@ -357,6 +357,17 @@ void LocalPoseGraph::writeSplineInFile(std::vector<PoseEstimate>& control_point_
   }
   nurbs_trans_file.close();
 
+  /*orientation from spline*/
+  file_path = std::string(path) + std::string("/") + file_name + std::string("_orientation.txt");
+  std::ofstream nurbs_rot_file(file_path.c_str());
+  for (PoseAndRangeData pose_and_range : range_data_vec)
+  {
+    Eigen::Vector3d euler = pose_and_range.pose.rotation().toRotationMatrix().eulerAngles(0,1,2);
+    nurbs_rot_file<<"time: "<< common::ToSeconds(pose_and_range.time - control_point_vec[0].time)<<" x: "<<euler.x()
+    <<" y: "<<euler.y()
+    <<" z: "<<euler.z()<<std::endl;
+  }
+  nurbs_rot_file.close();
   /*linear velocity from spline*/
   file_path = std::string(path) + std::string("/") + file_name + std::string("_vel.txt");
   std::ofstream nurbs_vel_file(file_path.c_str());

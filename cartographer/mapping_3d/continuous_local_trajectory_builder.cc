@@ -344,10 +344,9 @@ std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> Continuous
     std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> insertion_result_vec;
     for (PoseAndRangeData& pose_and_range : pose_and_range_vec) {
       //Transform range data to map
-//      sensor::RangeData range_data = sensor::TransformRangeData(pose_and_range.range_data,
-//                                                                matching_submap->local_pose().cast<float>()*
-//                                                                pose_and_range.pose.cast<float>());
-      sensor::RangeData range_data = pose_and_range.range_data;
+      sensor::RangeData range_data = sensor::TransformRangeData(pose_and_range.range_data,
+                                                                matching_submap->local_pose().cast<float>()*pose_and_range.pose.cast<float>());
+//      sensor::RangeData range_data = pose_and_range.range_data;
       sensor::RangeData temp_cloud;
       temp_cloud.origin = range_data.origin;
       for (const Eigen::Vector3f& hit : range_data.returns) {
@@ -370,8 +369,12 @@ std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> Continuous
         last_data = true;
 
       range_data_counter++;
+//      transform::Rigid3d transform = matching_submap->local_pose()*pose_and_range.pose;
+//      active_submaps_.InsertRangeData(sensor::TransformRangeData(temp_cloud,transform.cast<float>()),
+//          imu_tracker_->orientation(),
+//          last_data);
       transform::Rigid3d transform = matching_submap->local_pose()*pose_and_range.pose;
-      active_submaps_.InsertRangeData(sensor::TransformRangeData(temp_cloud,transform.cast<float>()),
+      active_submaps_.InsertRangeData(temp_cloud,
           imu_tracker_->orientation(),
           last_data);
       last_data = false;
@@ -380,18 +383,22 @@ std::vector<std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>> Continuous
         insertion_submaps.push_back(submap);
       }
       temp_cloud.origin = range_data.origin;
-      insertion_result_vec.push_back(std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>(
-              new LocalTrajectoryBuilder::InsertionResult {pose_and_range.time, temp_cloud, matching_submap->local_pose()*pose_and_range.pose,
-                std::move(insertion_submaps)}));
+//      insertion_result_vec.push_back(std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>(
+//              new LocalTrajectoryBuilder::InsertionResult {pose_and_range.time, temp_cloud, matching_submap->local_pose()*pose_and_range.pose,
+//                std::move(insertion_submaps)}));
 //      LOG(INFO)<<matching_submap->local_pose();
     }
-//    std::vector<std::shared_ptr<const Submap>> insertion_submaps;
-//    for (std::shared_ptr<Submap> submap : active_submaps_.submaps()) {
-//      insertion_submaps.push_back(submap);
-//    }
-//    insertion_result_vec.push_back(std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>(
-//        new LocalTrajectoryBuilder::InsertionResult {time, complete_scan, pose_estimate_,
-//          std::move(insertion_submaps)}));
+    std::vector<std::shared_ptr<const Submap>> insertion_submaps;
+    for (std::shared_ptr<Submap> submap : active_submaps_.submaps()) {
+      insertion_submaps.push_back(submap);
+    }
+//    active_submaps_.InsertRangeData(complete_scan,
+//        imu_tracker_->orientation(),
+//        false);
+    complete_scan = sensor::TransformRangeData(complete_scan, pose_estimate_.inverse().cast<float>());
+    insertion_result_vec.push_back(std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>(
+        new LocalTrajectoryBuilder::InsertionResult {time, complete_scan, pose_estimate_,
+          std::move(insertion_submaps)}));
     return insertion_result_vec;
     //end insertion vec
 //    return std::unique_ptr<LocalTrajectoryBuilder::InsertionResult>(

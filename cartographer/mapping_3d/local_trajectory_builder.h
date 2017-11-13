@@ -32,7 +32,7 @@
 #include "cartographer/sensor/range_data.h"
 #include "cartographer/sensor/voxel_filter.h"
 #include "cartographer/transform/rigid_transform.h"
-
+#include <fstream>
 namespace cartographer {
 namespace mapping_3d {
 
@@ -78,8 +78,10 @@ class LocalTrajectoryBuilder {
       common::Time time, const sensor::RangeData& range_data_in_tracking,
       const transform::Rigid3d& pose_observation);
 
+  void writePoseinFile(common::Time time);
+
   const proto::LocalTrajectoryBuilderOptions options_;
-  mapping_3d::ActiveSubmapsDecay active_submaps_;
+  mapping_3d::ActiveSubmaps active_submaps_;
 
   PoseEstimate last_pose_estimate_;
 
@@ -105,6 +107,8 @@ class LocalTrajectoryBuilder {
   int num_accumulated_ = 0;
   transform::Rigid3f first_pose_estimate_ = transform::Rigid3f::Identity();
   sensor::RangeData accumulated_range_data_;
+  std::ofstream file_;
+  std::ofstream file_rot_;
 };
 
 }  // namespace mapping_3d

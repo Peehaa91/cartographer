@@ -152,9 +152,9 @@ class NurbsTranslationAccelerationDeltaFunctor {
 
       residual[counter] = scaling_factor_ * (inital_acceleration[0] - lin_acc[0]);
       counter++;
-      residual[counter] = scaling_factor_ * (inital_acceleration[1] + lin_acc[1]);
+      residual[counter] = scaling_factor_ * (inital_acceleration[1] - lin_acc[1]);
       counter++;
-      residual[counter] = scaling_factor_ * (inital_acceleration[2] + lin_acc[2]);
+      residual[counter] = scaling_factor_ * (inital_acceleration[2] - lin_acc[2]);
       counter++;
     }
     return true;

@@ -13,7 +13,7 @@
 -- limitations under the License.
 
 SPARSE_POSE_GRAPH = {
-  optimize_every_n_scans = 90000,
+  optimize_every_n_scans = 90,
   constraint_builder = {
     sampling_ratio = 0.3,
     max_constraint_distance = 15.,

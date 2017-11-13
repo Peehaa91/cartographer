@@ -51,8 +51,8 @@ class GlobalTrajectoryBuilder
   const int trajectory_id_;
   mapping_3d::SparsePoseGraph* const sparse_pose_graph_;
   /*Here you can switch between local trajectory builders*/
-  ContinuousLocalTrajectoryBuilder local_trajectory_builder_;
-//  LocalTrajectoryBuilder local_trajectory_builder_;
+  //ContinuousLocalTrajectoryBuilder local_trajectory_builder_;
+  LocalTrajectoryBuilder local_trajectory_builder_;
 };
 
 }  // namespace mapping_3d

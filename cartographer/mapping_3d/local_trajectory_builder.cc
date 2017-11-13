@@ -23,6 +23,10 @@
 #include "cartographer/mapping_3d/proto/submaps_options.pb.h"
 #include "cartographer/mapping_3d/scan_matching/proto/ceres_scan_matcher_options.pb.h"
 #include "glog/logging.h"
+#include <fstream>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace cartographer {
 namespace mapping_3d {
@@ -38,9 +42,25 @@ LocalTrajectoryBuilder::LocalTrajectoryBuilder(
       ceres_scan_matcher_(common::make_unique<scan_matching::CeresScanMatcher>(
           options_.ceres_scan_matcher_options())),
       odometry_state_tracker_(options_.num_odometry_states()),
-      accumulated_range_data_{Eigen::Vector3f::Zero(), {}, {}} {}
+      accumulated_range_data_{Eigen::Vector3f::Zero(), {}, {}} {
+      struct stat myStat;
+      const char* path = "/home/schnattinger/.ros/nurbs/standard/test";
+      int result = stat(path, &myStat);
+      LOG(INFO)<<"output of stat: "<<result;
+      if (result == -1){
+        LOG(INFO)<<"created directory: "<<path;
+        mkdir(path, 0700);
+      }
+      std::string file_path = std::string(path) + std::string("/") + "standard_trans_" + std::string(".txt");
+      file_.open(file_path.c_str());
+      file_path = std::string(path) + std::string("/") + "standard_orientation_" + std::string(".txt");
+      file_rot_.open(file_path.c_str());
+      }
 
-LocalTrajectoryBuilder::~LocalTrajectoryBuilder() {}
+LocalTrajectoryBuilder::~LocalTrajectoryBuilder() {
+  file_.close();
+  file_rot_.close();
+}
 
 void LocalTrajectoryBuilder::AddPlaneData(const common::Time time,
                                           const Eigen::Vector4d& coefficients)
@@ -178,7 +198,7 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
   const transform::Rigid3d model_prediction = pose_estimate_;
   const transform::Rigid3d& pose_prediction = odometry_prediction;
 
-  std::shared_ptr<const SubmapDecay> matching_submap =
+  std::shared_ptr<const Submap> matching_submap =
       active_submaps_.submaps().front();
   LOG(INFO)<<"before inverse: "<<pose_prediction;
   transform::Rigid3d initial_ceres_pose =
@@ -206,27 +226,27 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
   LOG(INFO)<<"size second after: "<<filtered_point_cloud_in_tracking.size();
   float res = matching_submap->high_resolution_hybrid_grid().resolution();
 //  const HybridDecayGrid* decay_grid = new HybridDecayGrid(res);
-  const HybridDecayGrid* decay_grid_high = &matching_submap->high_resolution_hybrid_decay_grid();
-  const HybridDecayGrid* decay_grid_low = &matching_submap->low_resolution_hybrid_decay_grid();
+//  const HybridDecayGrid* decay_grid_high = &matching_submap->high_resolution_hybrid_decay_grid();
+//  const HybridDecayGrid* decay_grid_low = &matching_submap->low_resolution_hybrid_decay_grid();
 
   /*Here you can switch the scan matching behaviours*/
-//  ceres_scan_matcher_->Match(
-//      matching_submap->local_pose().inverse() * pose_prediction,
-//      initial_ceres_pose,
-//      {{&filtered_point_cloud_in_tracking,
-//        &matching_submap->high_resolution_hybrid_grid()},
-//       {&low_resolution_point_cloud_in_tracking,
-//        &matching_submap->low_resolution_hybrid_grid()}},
-//      &pose_observation_in_submap, &summary);
-  ceres_scan_matcher_->MatchWithFreeSpace(
+  ceres_scan_matcher_->Match(
       matching_submap->local_pose().inverse() * pose_prediction,
       initial_ceres_pose,
       {{&filtered_point_cloud_in_tracking,
         &matching_submap->high_resolution_hybrid_grid()},
        {&low_resolution_point_cloud_in_tracking,
         &matching_submap->low_resolution_hybrid_grid()}},
-        {decay_grid_high, decay_grid_low},
       &pose_observation_in_submap, &summary);
+//  ceres_scan_matcher_->MatchWithFreeSpace(
+//      matching_submap->local_pose().inverse() * pose_prediction,
+//      initial_ceres_pose,
+//      {{&filtered_point_cloud_in_tracking,
+//        &matching_submap->high_resolution_hybrid_grid()},
+//       {&low_resolution_point_cloud_in_tracking,
+//        &matching_submap->low_resolution_hybrid_grid()}},
+//        {decay_grid_high, decay_grid_low},
+//      &pose_observation_in_submap, &summary);
   pose_estimate_ = matching_submap->local_pose() * pose_observation_in_submap;
 
   odometry_correction_ = transform::Rigid3d::Identity();
@@ -250,6 +270,7 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
         delta_t;
     LOG(INFO)<<"velocity estimate: "<<velocity_estimate_;
   }
+  writePoseinFile(time);
   last_scan_match_time_ = time_;
 
   last_pose_estimate_ = {
@@ -260,6 +281,22 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
   return InsertIntoSubmap(time, filtered_range_data, pose_estimate_);
 }
 
+void LocalTrajectoryBuilder::writePoseinFile(common::Time time)
+{
+
+  double delta_time = 0;
+  if (last_scan_match_time_ > common::Time::min())
+    delta_time = common::ToSeconds(time - last_scan_match_time_);
+  /*translation*/
+  file_<<"time: "<<delta_time<<" x: "<<pose_estimate_.translation().x()
+      <<" y: "<<pose_estimate_.translation().y()
+      <<" z: "<<pose_estimate_.translation().z()<<std::endl;
+  /*orientation*/
+  Eigen::Vector3d euler = pose_estimate_.rotation().toRotationMatrix().eulerAngles(0,1,2);
+  file_rot_<<"time: "<<delta_time<<" x: "<<euler.x()
+        <<" y: "<<euler.y()
+        <<" z: "<<euler.z()<<std::endl;
+}
 void LocalTrajectoryBuilder::AddOdometerData(
     const common::Time time, const transform::Rigid3d& odometer_pose) {
   if (imu_tracker_ == nullptr) {
@@ -299,10 +336,14 @@ LocalTrajectoryBuilder::InsertIntoSubmap(
   for (std::shared_ptr<Submap> submap : active_submaps_.submaps()) {
     insertion_submaps.push_back(submap);
   }
+//  active_submaps_.InsertRangeData(
+//      sensor::TransformRangeData(range_data_in_tracking,
+//                                 pose_observation.cast<float>()),
+//      imu_tracker_->orientation(), true);
   active_submaps_.InsertRangeData(
       sensor::TransformRangeData(range_data_in_tracking,
                                  pose_observation.cast<float>()),
-      imu_tracker_->orientation(), true);
+      imu_tracker_->orientation());
   return std::unique_ptr<InsertionResult>(
       new InsertionResult{time, range_data_in_tracking, pose_observation,
                           std::move(insertion_submaps)});

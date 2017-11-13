@@ -440,7 +440,7 @@ void CeresScanMatcher::MatchSplineWithFreeSpace(const std::vector<const HybridGr
 //          new ceres:: AutoDiffCostFunction<NurbsTranslationAccelerationDeltaFunctor,
 //          ceres::DYNAMIC, 3,4,3,4,3,4,3,4,3,4>(
 //              new NurbsTranslationAccelerationDeltaFunctor(
-//                  2.0/std::sqrt(static_cast<double>(linear_acc_data_vector.size())),//0.17/std::sqrt(static_cast<double>(3 * linear_acc_data_vector.size())),
+//                  0.3/std::sqrt(static_cast<double>(linear_acc_data_vector.size())),//0.17/std::sqrt(static_cast<double>(3 * linear_acc_data_vector.size())),
 //                  linear_acc_data_vector,
 //                  begin,
 //                  end),
@@ -523,7 +523,7 @@ void CeresScanMatcher::freeSpaceEstimator(std::vector<CeresPose>& ceres_pose_con
     problem.AddResidualBlock(
               new ceres::AutoDiffCostFunction<NurbsControlPointFreeSpaceCostFunctor, ceres::DYNAMIC,3,4,3,4,3,4,3,4,3,4>(
                   new NurbsControlPointFreeSpaceCostFunctor(
-                      options_.occupied_space_weight(i)/std::sqrt(static_cast<double>(number_of_residuals)),
+                      1.5*options_.occupied_space_weight(i)/std::sqrt(static_cast<double>(number_of_residuals)),
                       *hybrid_grid[i],
                       decay_grid[i],
                       begin,
